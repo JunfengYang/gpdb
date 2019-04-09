@@ -472,6 +472,10 @@ CreateKeyFromCatalogTuple(Relation catalogrel, HeapTuple tuple,
 			*exempt = true;
 			break;
 
+		case AccessMethodRelationId:
+			*recognized = true;
+			break;
+
 		default:
 			*recognized = false;
 			break;
@@ -883,6 +887,16 @@ GetAssignedOidsForDispatch(void)
 	l = dispatch_oids;
 	dispatch_oids = NIL;
 	return l;
+}
+
+List *GetAssignedOids(void)
+{
+	return dispatch_oids;
+}
+
+void SetAssignedOids(List *l)
+{
+	dispatch_oids = l;
 }
 
 /*

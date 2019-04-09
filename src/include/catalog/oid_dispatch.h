@@ -20,6 +20,10 @@
 extern void AddDispatchOidFromTuple(Relation catalogrel, HeapTuple tuple);
 extern List *GetAssignedOidsForDispatch(void);
 
+extern List *GetAssignedOids(void);
+extern void SetAssignedOids(List *l);
+
+
 /* Functions used in QE nodes */
 extern void AddPreassignedOids(List *l);
 extern void AddPreassignedOidFromBinaryUpgrade(Oid oid, Oid catalog,

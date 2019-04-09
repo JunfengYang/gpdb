@@ -1235,7 +1235,9 @@ index_create(Relation heapRelation,
 	}
 	else
 	{
+		List *l = GetAssignedOids();
 		index_build(heapRelation, indexRelation, indexInfo, isprimary, false);
+		SetAssignedOids(l);
 	}
 
 	/*
@@ -2884,7 +2886,8 @@ IndexBuildHeapScan(Relation heapRelation,
 		else
 		{
 			/* Call the AM's callback routine to process the tuple */
-			callback(indexRelation, &heapTuple->t_self, values, isnull, tupleIsAlive,
+			//callback(indexRelation, &heapTuple->t_self, values, isnull, tupleIsAlive,
+			callback(indexRelation, heapTuple, values, isnull, tupleIsAlive,
 					 callback_state);
 		}
 	}

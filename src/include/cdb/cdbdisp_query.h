@@ -90,6 +90,13 @@ CdbDispatchCommandToSegments(const char* strCommand,
 							 List *segments,
 							 struct CdbPgResults* cdb_pgresults);
 
+void
+CdbDispatchCommandToSegmentsWithOids(const char* strCommand,
+							 int flags,
+							 List *segments,
+							 List *oid_assignments,
+							 struct CdbPgResults* cdb_pgresults);
+
 /*
  * CdbDispatchUtilityStatement
  *

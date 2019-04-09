@@ -104,6 +104,7 @@ static char *buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 static DispatchCommandQueryParms *cdbdisp_buildPlanQueryParms(struct QueryDesc *queryDesc, bool planRequiresTxn);
 static DispatchCommandQueryParms *cdbdisp_buildUtilityQueryParms(struct Node *stmt, int flags, List *oid_assignments);
 static DispatchCommandQueryParms *cdbdisp_buildCommandQueryParms(const char *strCommand, int flags);
+static DispatchCommandQueryParms *cdbdisp_buildCommandQueryParmsWithOids(const char *strCommand, int flags, List *oid_assignments);
 
 static void cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 											int flags, List *segments,
@@ -357,6 +358,34 @@ CdbDispatchCommandToSegments(const char *strCommand,
 										   cdb_pgresults);
 }
 
+void
+CdbDispatchCommandToSegmentsWithOids(const char* strCommand,
+                             int flags,
+                             List *segments,
+                             List *oid_assignments,
+                             struct CdbPgResults* cdb_pgresults)
+{
+	DispatchCommandQueryParms *pQueryParms;
+	bool needTwoPhase = flags & DF_NEED_TWO_PHASE;
+	bool withSnapshot = flags & DF_WITH_SNAPSHOT;
+
+	dtmPreCommand("CdbDispatchCommand", strCommand,
+				  NULL, needTwoPhase, withSnapshot,
+				  false /* inCursor */ );
+
+	elogif((Debug_print_full_dtm || log_min_messages <= DEBUG5), LOG,
+		   "CdbDispatchCommand: %s (needTwoPhase = %s)",
+		   strCommand, (needTwoPhase ? "true" : "false"));
+
+	pQueryParms = cdbdisp_buildCommandQueryParmsWithOids(strCommand, flags, oid_assignments);
+
+	return cdbdisp_dispatchCommandInternal(pQueryParms,
+										   flags,
+										   segments,
+										   cdb_pgresults);
+}
+
+
 /*
  * CdbDispatchUtilityStatement
  *
@@ -462,6 +491,45 @@ cdbdisp_buildCommandQueryParms(const char *strCommand, int flags)
 	pQueryParms->serializedQuerytreelen = 0;
 	pQueryParms->serializedQueryDispatchDesc = NULL;
 	pQueryParms->serializedQueryDispatchDesclen = 0;
+
+	/*
+	 * Serialize a version of our DTX Context Info
+	 */
+	pQueryParms->serializedDtxContextInfo =
+		qdSerializeDtxContextInfo(&pQueryParms->serializedDtxContextInfolen,
+								  withSnapshot, false,
+								  mppTxnOptions(needTwoPhase),
+								  "cdbdisp_dispatchCommandInternal");
+
+	return pQueryParms;
+}
+
+static DispatchCommandQueryParms *
+cdbdisp_buildCommandQueryParmsWithOids(const char *strCommand, int flags, List *oid_assignments)
+{
+	bool needTwoPhase = flags & DF_NEED_TWO_PHASE;
+	bool withSnapshot = flags & DF_WITH_SNAPSHOT;
+	char *serializedQueryDispatchDesc = NULL;
+	int serializedQueryDispatchDesc_len = 0;
+	QueryDispatchDesc *qddesc;
+	DispatchCommandQueryParms *pQueryParms;
+
+	pQueryParms = palloc0(sizeof(*pQueryParms));
+	pQueryParms->strCommand = strCommand;
+	pQueryParms->serializedQuerytree = NULL;
+	pQueryParms->serializedQuerytreelen = 0;
+
+	if (oid_assignments)
+	{
+		qddesc = makeNode(QueryDispatchDesc);
+		qddesc->oidAssignments = oid_assignments;
+
+		serializedQueryDispatchDesc = serializeNode((Node *) qddesc, &serializedQueryDispatchDesc_len,
+													NULL /* uncompressed_size */ );
+	}
+	pQueryParms->serializedQueryDispatchDesc = serializedQueryDispatchDesc;
+	pQueryParms->serializedQueryDispatchDesclen = serializedQueryDispatchDesc_len;
+
 
 	/*
 	 * Serialize a version of our DTX Context Info

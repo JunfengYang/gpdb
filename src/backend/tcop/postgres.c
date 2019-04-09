@@ -5386,6 +5386,18 @@ PostgresMain(int argc, char *argv[],
 						}
 						else
 						{
+							if (serializedQueryDispatchDesclen != 0) {
+								QueryDispatchDesc *ddesc = (QueryDispatchDesc *) deserializeNode(serializedQueryDispatchDesc,serializedQueryDispatchDesclen);
+								if (!ddesc || !IsA(ddesc, QueryDispatchDesc))
+									elog(ERROR, "MPPEXEC: received invalid QueryDispatchDesc during hacking");
+								
+								if (ddesc->oidAssignments) {
+									start_xact_command();
+									MemoryContext oldcontext = MemoryContextSwitchTo(MessageContext);
+									AddPreassignedOids(ddesc->oidAssignments);
+									MemoryContextSwitchTo(oldcontext);
+								}
+							} 
 							exec_simple_query(query_string);
 						}
 					}
