@@ -2886,8 +2886,8 @@ IndexBuildHeapScan(Relation heapRelation,
 		else
 		{
 			/* Call the AM's callback routine to process the tuple */
-			//callback(indexRelation, &heapTuple->t_self, values, isnull, tupleIsAlive,
-			callback(indexRelation, heapTuple, values, isnull, tupleIsAlive,
+			//callback(indexRelation, heapTuple, values, isnull, tupleIsAlive,
+			callback(indexRelation, &heapTuple->t_self, values, isnull, tupleIsAlive,
 					 callback_state);
 		}
 	}
