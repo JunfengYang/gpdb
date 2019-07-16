@@ -3332,9 +3332,6 @@ AbortTransaction(void)
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())
 		UnassignResGroup();
-
-	/* Error handling of endpoint interface */
-	AbortEndpoint();
 }
 
 /*
@@ -5567,9 +5564,6 @@ AbortSubTransaction(void)
 	 * with the commit case.
 	 */
 	XactReadOnly = s->prevXactReadOnly;
-
-	/* Error handling of endpoint interface */
-	AbortEndpoint();
 
 	RESUME_INTERRUPTS();
 }
