@@ -43,6 +43,8 @@
 #include "utils/syscache.h"
 
 
+extern DefElem *makeDefElem(char *name, Node *arg);
+
 typedef struct
 {
 	char	   *tablename;
@@ -113,7 +115,8 @@ Datum
 transformGenericOptions(Oid catalogId,
 						Datum oldOptions,
 						List *options,
-						Oid fdwvalidator)
+						Oid fdwvalidator,
+						bool skipValidate)
 {
 	List	   *resultOptions = untransformRelOptions(oldOptions);
 	ListCell   *optcell;
@@ -191,7 +194,7 @@ transformGenericOptions(Oid catalogId,
 	if (catalogId != UserMappingRelationId)
 		SeparateOutMppExecute(&resultOptions);
 
-	if (OidIsValid(fdwvalidator))
+	if (OidIsValid(fdwvalidator) && !skipValidate)
 	{
 		Datum valarg = optionListToArray(resultOptions);
 
@@ -205,6 +208,141 @@ transformGenericOptions(Oid catalogId,
 	}
 
 	return result;
+}
+
+
+Datum
+TransformGPFTDistOptionsToTextDatum(Oid catalogId, Oid fdwvalidator, const List* distoptions)
+{
+	ArrayBuildState   *astate = NULL;
+	ListCell		  *distoptscell;
+	int					nelems = 0;
+	int					nsubelems = 0;
+	int					expectOptLen = ((GPFTDistOptionElem *) linitial(distoptions)) ->options->length;
+	
+	foreach(distoptscell, distoptions)
+	{
+		Node				   *contentIdVal = NULL;
+		ListCell			   *cell;
+		GPFTDistOptionElem	   *distoptelem = (GPFTDistOptionElem *) lfirst(distoptscell);
+
+		if (!IsA(distoptelem, GPFTDistOptionElem))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("Elements in GPFTDistOptionsInfo->distOptions should be GPFTDistOptionElem objects")));
+
+		if (distoptelem->options->length != expectOptLen)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("each GPFTDistOptionElem->options should contain same number of options.")));
+		
+		if (distoptelem->contentId < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("\"contentId\" in GPFTDistOptionElem must be larger than or equal to 0, got %d",
+							distoptelem->contentId)));
+
+		if (OidIsValid(fdwvalidator))
+		{
+			Datum valarg = optionListToArray(distoptelem->options);
+
+			/*
+			* Pass a null options list as an empty array, so that validators
+			* don't have to be declared non-strict to handle the case.
+			*/
+			if (DatumGetPointer(valarg) == NULL)
+				valarg = PointerGetDatum(construct_empty_array(TEXTOID));
+			OidFunctionCall2(fdwvalidator, valarg, ObjectIdGetDatum(catalogId));
+		}
+		contentIdVal = (Node *) makeInteger(distoptelem->contentId);
+		distoptelem->options = lappend(distoptelem->options,
+									   makeDefElem(pstrdup("content_id"), contentIdVal));
+
+		foreach(cell, distoptelem->options)
+		{
+			DefElem	   *def = lfirst(cell);
+			const char *value;
+			Size		len;
+			text	   *t;
+
+			value = defGetString(def);
+			len = VARHDRSZ + strlen(def->defname) + 1 + strlen(value);
+			t = palloc(len + 1);
+			SET_VARSIZE(t, len);
+			sprintf(VARDATA(t), "%s=%s", def->defname, value);
+
+			astate = accumArrayResult(astate, PointerGetDatum(t),
+									false, TEXTOID,
+									CurrentMemoryContext);
+			nsubelems++;
+		}
+		nelems++;
+	}
+
+	if (astate)
+	{
+		int	dims[2];
+		int	lbs[2];
+		dims[0] = nelems;
+		dims[1] = nsubelems / nelems;
+		lbs[0] = 1;
+		lbs[1] = 1;
+
+		return makeMdArrayResult(astate, 2, dims, lbs, CurrentMemoryContext, astate->private_cxt);
+	}
+
+	return PointerGetDatum(NULL);
+}
+
+
+/*
+ * Returns list of GPFTDistOptionElem objcts.
+ */
+struct GPFTDistOptionsInfo *
+TransformTextDatumToGPFTDistOptions(Datum options)
+{
+	GPFTDistOptionsInfo	   *optionsInfo;
+	ExpandedArrayHeader	   *earray;
+	Datum				   *distoptionelems;
+	int						noptions;
+	int						i;
+	GPFTDistOptionElem	   *distopt = NULL;
+
+	/* Nothing to do if no options */
+	if (!PointerIsValid(DatumGetPointer(options)))
+		return NULL;
+
+	optionsInfo = (GPFTDistOptionsInfo *) makeNode(GPFTDistOptionsInfo);
+
+	earray = DatumGetExpandedArray(options);
+	deconstruct_array(earray->fvalue, TEXTOID, -1, false, 'i',
+					  &distoptionelems, NULL, &noptions);
+	for (i = 0; i < noptions; i++)
+	{
+		char				   *s;
+		char				   *p;
+		Node				   *val = NULL;
+
+		if (i % earray->dims[1] == 0)
+		{
+			distopt = (GPFTDistOptionElem *) makeNode(GPFTDistOptionElem);
+			optionsInfo->distOptions = lappend(optionsInfo->distOptions, distopt);
+		}
+
+		s = TextDatumGetCString(distoptionelems[i]);
+		p = strchr(s, '=');
+		if (p)
+		{
+			*p++ = '\0';
+			val = (Node *) makeString(pstrdup(p));
+		}
+		if (strcmp(s, "content_id") == 0)
+			distopt->contentId = atoi(p);
+		else
+			distopt->options = lappend(distopt->options, makeDefElem(pstrdup(s), val));
+	}
+
+	return optionsInfo;
 }
 
 
@@ -631,7 +769,8 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 	fdwoptions = transformGenericOptions(ForeignDataWrapperRelationId,
 										 PointerGetDatum(NULL),
 										 stmt->options,
-										 fdwvalidator);
+										 fdwvalidator,
+										 false);
 
 	if (PointerIsValid(DatumGetPointer(fdwoptions)))
 		values[Anum_pg_foreign_data_wrapper_fdwoptions - 1] = fdwoptions;
@@ -791,7 +930,8 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 		datum = transformGenericOptions(ForeignDataWrapperRelationId,
 										datum,
 										stmt->options,
-										fdwvalidator);
+										fdwvalidator,
+										false);
 
 		if (PointerIsValid(DatumGetPointer(datum)))
 			repl_val[Anum_pg_foreign_data_wrapper_fdwoptions - 1] = datum;
@@ -958,7 +1098,8 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	srvoptions = transformGenericOptions(ForeignServerRelationId,
 										 PointerGetDatum(NULL),
 										 stmt->options,
-										 fdw->fdwvalidator);
+										 fdw->fdwvalidator,
+										 false);
 
 	if (PointerIsValid(DatumGetPointer(srvoptions)))
 		values[Anum_pg_foreign_server_srvoptions - 1] = srvoptions;
@@ -1076,7 +1217,8 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 		datum = transformGenericOptions(ForeignServerRelationId,
 										datum,
 										stmt->options,
-										fdw->fdwvalidator);
+										fdw->fdwvalidator,
+										false);
 
 		if (PointerIsValid(DatumGetPointer(datum)))
 			repl_val[Anum_pg_foreign_server_srvoptions - 1] = datum;
@@ -1223,7 +1365,8 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	useoptions = transformGenericOptions(UserMappingRelationId,
 										 PointerGetDatum(NULL),
 										 stmt->options,
-										 fdw->fdwvalidator);
+										 fdw->fdwvalidator,
+										 false);
 
 	if (PointerIsValid(DatumGetPointer(useoptions)))
 		values[Anum_pg_user_mapping_umoptions - 1] = useoptions;
@@ -1347,7 +1490,8 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 		datum = transformGenericOptions(UserMappingRelationId,
 										datum,
 										stmt->options,
-										fdw->fdwvalidator);
+										fdw->fdwvalidator,
+										false);
 
 		if (PointerIsValid(DatumGetPointer(datum)))
 			repl_val[Anum_pg_user_mapping_umoptions - 1] = datum;
@@ -1490,6 +1634,32 @@ RemoveUserMappingById(Oid umId)
 }
 
 /*
+ * Convert an options handler function name passed from the parser to an Oid.
+ */
+static Oid
+lookup_fdw_options_handler_func(List *distoptionsfunc)
+{
+	Oid			handlerOid;
+	Oid			funcargtypes[1];	/* dummy */
+
+	if (distoptionsfunc == NULL)
+		return InvalidOid;
+
+	funcargtypes[0] = TEXTARRAYOID;
+	/* handlers have no arguments */
+	handlerOid = LookupFuncName(distoptionsfunc, 1, funcargtypes, false);
+
+	/* check that handler has correct return type */
+	if (get_func_rettype(handlerOid) != FT_DISTOPTIONSOID)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("function %s must return type %s",
+				   NameListToString(distoptionsfunc), "ft_distoptions")));
+
+	return handlerOid;
+}
+
+/*
  * Create a foreign table
  * call after DefineRelation().
  */
@@ -1498,6 +1668,7 @@ CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission
 {
 	Relation	ftrel;
 	Datum		ftoptions;
+	Datum		gpftdistoptions;
 	Datum		values[Natts_pg_foreign_table];
 	bool		nulls[Natts_pg_foreign_table];
 	HeapTuple	tuple;
@@ -1505,8 +1676,11 @@ CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission
 	ObjectAddress myself;
 	ObjectAddress referenced;
 	Oid			ownerId;
+	Oid			distoptionsfunc;
 	ForeignDataWrapper *fdw;
 	ForeignServer *server;
+	GPFTDistOptionsInfo *gpftdistoptionsinfo = NULL;
+	bool		skipValidateOptions = false;
 
 	/*
 	 * Advance command counter to ensure the pg_attribute tuple is visible;
@@ -1543,17 +1717,50 @@ CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission
 
 	values[Anum_pg_foreign_table_ftrelid - 1] = ObjectIdGetDatum(relid);
 	values[Anum_pg_foreign_table_ftserver - 1] = ObjectIdGetDatum(server->serverid);
+	
+	distoptionsfunc = lookup_fdw_options_handler_func(stmt->distoptionsfunc);
+	values[Anum_pg_foreign_table_ftdistoptionsfunc - 1] = ObjectIdGetDatum(distoptionsfunc);
+	
+	if (OidIsValid(distoptionsfunc))
+		skipValidateOptions = true;
 	/* Add table generic options */
 	ftoptions = transformGenericOptions(ForeignTableRelationId,
 										PointerGetDatum(NULL),
 										stmt->options,
-										fdw->fdwvalidator);
+										fdw->fdwvalidator,
+										skipValidateOptions);
 
 	if (PointerIsValid(DatumGetPointer(ftoptions)))
 		values[Anum_pg_foreign_table_ftoptions - 1] = ftoptions;
 	else
 		nulls[Anum_pg_foreign_table_ftoptions - 1] = true;
+	
+	if (skipValidateOptions && PointerIsValid(DatumGetPointer(ftoptions)))
+	{
+		List *resultOptions = untransformRelOptions(ftoptions);
+		Datum valarg;
 
+		if (SeparateOutMppExecute(&resultOptions) != FTEXECLOCATION_ALL_SEGMENTS)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("invalid mpp_option"),
+					errhint("\"OPTION HANDLER function_name\" shoud use with \"all segments\" mpp_option.")));
+		valarg = optionListToArray(resultOptions);
+
+		gpftdistoptionsinfo = GetGPFTDistOptionsInfo(distoptionsfunc,
+													 valarg);
+		gpftdistoptions = TransformGPFTDistOptionsToTextDatum(ForeignTableRelationId,
+															  fdw->fdwvalidator,
+															  gpftdistoptionsinfo->distOptions);
+	}
+	else
+		gpftdistoptions = PointerGetDatum(NULL);
+
+	if (PointerIsValid(DatumGetPointer(gpftdistoptions)))
+		values[Anum_pg_foreign_table_gpftdistoptions - 1] = gpftdistoptions;
+	else
+		nulls[Anum_pg_foreign_table_gpftdistoptions - 1] = true;
+	
 	tuple = heap_form_tuple(ftrel->rd_att, values, nulls);
 
 	simple_heap_insert(ftrel, tuple);

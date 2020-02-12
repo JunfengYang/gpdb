@@ -18,7 +18,9 @@
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_user_mapping.h"
+#include "cdb/cdbgang.h"
 #include "commands/defrem.h"
+#include "executor/execdesc.h"
 #include "foreign/fdwapi.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -27,10 +29,98 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "cdb/cdbvars.h"
+
+static List *currentSegOptions = NULL;
+
+extern DefElem *makeDefElem(char *name, Node *arg);
 
 
 extern Datum pg_options_to_table(PG_FUNCTION_ARGS);
 extern Datum postgresql_fdw_validator(PG_FUNCTION_ARGS);
+
+/*
+ * Built-in OPTION HNADLER function to distribute options
+ * for each segment;
+ */
+extern Datum comma_seperated_dist_options(PG_FUNCTION_ARGS);
+
+/*
+ * 
+ */
+GPFTDistOptionsInfo *
+GetGPFTDistOptionsInfo(Oid distoptionsfunc, Datum options)
+{
+	GPFTDistOptionsInfo	   *distOptionsInfo;
+
+	Assert(distoptionsfunc != InvalidOid);
+	
+	/*
+	 * Pass a null options list as an empty array, so that option handler
+	 * don't have to be declared non-strict to handle the case.
+	 */
+	if (DatumGetPointer(options) == NULL)
+		options = PointerGetDatum(construct_empty_array(TEXTOID));
+
+	distOptionsInfo = (GPFTDistOptionsInfo *) DatumGetPointer(
+		OidFunctionCall1(distoptionsfunc, options));
+
+	if (distOptionsInfo == NULL || !IsA(distOptionsInfo, GPFTDistOptionsInfo))
+		elog(ERROR, "foreign table OPTIONS HANDLER %u did not return an GPFTDistOptionsInfo struct",
+			 distoptionsfunc);
+
+	return distOptionsInfo;
+}
+
+void
+ParseDistributedOptionsForSegment(EState *estate, Oid relid)
+{
+	ForeignTable *ft;
+
+	currentSegOptions = NULL;
+	ft = GetForeignTable(relid);
+
+	if (ft->exec_location == FTEXECLOCATION_ALL_SEGMENTS && Gp_role == GP_ROLE_EXECUTE)
+	{
+		if (ft->ftdistoptiondinfo)
+		{
+			ExecSlice			currentslice = estate->es_sliceTable->slices[currentSliceId];
+			int					segment_qe_idx = 0;
+			bool				find = false;
+			ListCell 		   *cell;
+
+			for (int i = 0; i < currentslice.primaryProcesses->length; i++)
+			{
+				CdbProcess *process = (CdbProcess *) list_nth(currentslice.primaryProcesses, i);
+				if (process->contentid == GpIdentity.segindex)
+				{
+					segment_qe_idx++;
+					if (process->pid == MyProcPid)
+					{
+						find = true;
+						break;
+					}
+				}
+			}
+			if (!find)
+				elog(ERROR, "can not find the pid process to execute foreign table scan");
+			/*
+			* Only extract current segment options.
+			*/
+			foreach(cell, ft->ftdistoptiondinfo->distOptions)
+			{
+				GPFTDistOptionElem *distopt = (GPFTDistOptionElem *) lfirst(cell);
+				if (distopt->contentId == GpIdentity.segindex && --segment_qe_idx == 0)
+				{
+					currentSegOptions = distopt->options;
+					ft->options = currentSegOptions;
+					break;
+				}
+			}
+		}
+	}
+}
+
 
 /* Get and separate out the mpp_execute option. */
 char
@@ -270,36 +360,55 @@ GetUserMapping(Oid userid, Oid serverid)
 ForeignTable *
 GetForeignTable(Oid relid)
 {
-	Form_pg_foreign_table tableform;
-	ForeignTable *ft;
-	HeapTuple	tp;
-	Datum		datum;
-	bool		isnull;
+	Form_pg_foreign_table	tableform;
+	ForeignTable		   *ft;
+	GPFTDistOptionsInfo	   *distoptionsinfo;
+	List				   *options;
+	HeapTuple				tp;
+	Datum					datum;
+	bool					isnull;
 
 	tp = SearchSysCache1(FOREIGNTABLEREL, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tp))
 		elog(ERROR, "cache lookup failed for foreign table %u", relid);
 	tableform = (Form_pg_foreign_table) GETSTRUCT(tp);
 
-	ft = (ForeignTable *) palloc(sizeof(ForeignTable));
+	ft = (ForeignTable *) palloc0(sizeof(ForeignTable));
 	ft->relid = relid;
 	ft->serverid = tableform->ftserver;
+	ft->distoptionsfunc = tableform->ftdistoptionsfunc;
 
 	/* Extract the ftoptions */
 	datum = SysCacheGetAttr(FOREIGNTABLEREL,
 							tp,
 							Anum_pg_foreign_table_ftoptions,
 							&isnull);
-	if (isnull)
-		ft->options = NIL;
-	else
-		ft->options = untransformRelOptions(datum);
 
-	ft->exec_location = SeparateOutMppExecute(&ft->options);
+	if (isnull)
+		options = NIL;
+	else
+		options = untransformRelOptions(datum);
+
+	ft->exec_location = SeparateOutMppExecute(&options);
 	if (ft->exec_location == FTEXECLOCATION_NOT_DEFINED)
 	{
 		ForeignServer *server = GetForeignServer(ft->serverid);
 		ft->exec_location = server->exec_location;
+	}
+	if (currentSegOptions)
+		ft->options = currentSegOptions;
+	else
+	{
+		ft->options = options;
+		datum = SysCacheGetAttr(FOREIGNTABLEREL,
+								tp,
+								Anum_pg_foreign_table_gpftdistoptions,
+								&isnull);
+		if (isnull)
+			distoptionsinfo = NULL;
+		else
+			distoptionsinfo = TransformTextDatumToGPFTDistOptions(datum);
+		ft->ftdistoptiondinfo = distoptionsinfo;
 	}
 
 	ReleaseSysCache(tp);
@@ -730,6 +839,67 @@ postgresql_fdw_validator(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(true);
+}
+
+Datum
+comma_seperated_dist_options(PG_FUNCTION_ARGS)
+{
+	List				   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
+	GPFTDistOptionsInfo	   *options_info = (GPFTDistOptionsInfo	*) makeNode(GPFTDistOptionsInfo);
+	List				   *seperated_options[list_length(options_list)];
+	int						max_seperated_option_len = 0;
+	int						i = 0;
+	ListCell			   *cell;
+
+	if (list_length(options_list) < 1)
+		return PointerGetDatum(options_info);
+
+	memset(&seperated_options, 0, sizeof(seperated_options));
+	foreach(cell, options_list)
+	{
+		DefElem	   *elem = (DefElem *) lfirst(cell);
+		char	   *value_str = defGetString(elem);
+		char	   *sub_str = strtok(value_str, ",");
+		while (sub_str)
+		{
+			Node *value_node = (Node *) makeString(sub_str);
+			seperated_options[i] = lappend(seperated_options[i], makeDefElem(pstrdup(elem->defname), value_node));
+			sub_str = strtok(NULL, ",");
+		}
+		if (seperated_options[0]->length > max_seperated_option_len)
+			max_seperated_option_len = seperated_options[0]->length;
+		i++;
+	}
+
+	for (i = 0; i < max_seperated_option_len; i++)
+	{
+		GPFTDistOptionElem	   *seg_elem = (GPFTDistOptionElem *) makeNode(GPFTDistOptionElem);
+		seg_elem->contentId = i % getgpsegmentCount();
+		for (int j = 0; j < options_list->length; j++)
+		{
+			if (seperated_options[j]->length == 1)
+				seg_elem->options = lappend(seg_elem->options, linitial(seperated_options[j]));
+			else if (seperated_options[j]->length == max_seperated_option_len)
+				seg_elem->options = lappend(seg_elem->options, list_nth(seperated_options[j], i));
+			else
+			{
+				DefElem *def = (DefElem *) linitial(seperated_options[j]);
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("invalid option counts \"%s\"", def->defname),
+						 errhint("The count of the comma seperated values should be 1 or %d",
+						 		 max_seperated_option_len)));
+			}
+		}
+		options_info->distOptions = lappend(options_info->distOptions, seg_elem);
+	}
+
+	for (i = 0; i < list_length(options_list); i++)
+	{
+		list_free(seperated_options[i]);
+	}
+
+	return PointerGetDatum(options_info);
 }
 
 

@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include "cdb/cdbtargeteddispatch.h"
+#include "foreign/fdwapi.h"		/* for GPFTDistOptionsInfo */
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"	/* for rt_fetch() */
 #include "nodes/makefuncs.h"	/* for makeVar() */
@@ -258,6 +259,27 @@ GetContentIdsFromPlanForSingleRelation(PlannerInfo *root, Plan *plan, int rangeT
 		}
 	}
 
+	if (IsA(plan, ForeignScan))
+	{
+		Assert(result.contentIds == NIL);
+		/*
+		 * Should also consider direct dispatch specify by foreign table.
+		 */
+		ForeignTable *ft = GetForeignTable(RelationGetRelid(relation));
+		GPFTDistOptionsInfo *ftDistoptionsInfo = ft->ftdistoptiondinfo;
+		if (ftDistoptionsInfo && ftDistoptionsInfo->distOptions->length > 0)
+		{
+			ListCell *cell;
+			result.isDirectDispatch = true;
+
+			foreach(cell, ftDistoptionsInfo->distOptions)
+			{
+				GPFTDistOptionElem *segOptions = (GPFTDistOptionElem *) lfirst(cell);
+				result.contentIds = lappend_int(result.contentIds, segOptions->contentId);
+			}
+		}
+	}
+
 	if (rte->rtekind == RTE_RELATION)
 		relation_close(relation, NoLock);
 
@@ -487,9 +509,10 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 			/* no change to dispatchInfo */
 			break;
 		case T_ForeignScan:
-			DisableTargetedDispatch(&dispatchInfo); /* not sure about
-													 * foreign tables ...
-													 * so disable */
+			dispatchInfo = GetContentIdsFromPlanForSingleRelation(root,
+																  plan,
+																  ((Scan *) plan)->scanrelid,
+																  plan->qual);
 			break;
 		case T_SplitUpdate:
 			break;

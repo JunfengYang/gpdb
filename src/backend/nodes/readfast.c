@@ -1183,6 +1183,7 @@ _readCreateForeignTableStmt(void)
 
 	READ_STRING_FIELD(servername);
 	READ_NODE_FIELD(options);
+	READ_NODE_FIELD(distoptionsfunc);
 
 	READ_DONE();
 }

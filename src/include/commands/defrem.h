@@ -19,6 +19,7 @@
 #include "utils/array.h"
 
 struct HTAB;  /* utils/hsearch.h */
+struct GPFTDistOptionsInfo; /* foreign/fdwapi.h */
 
 /* commands/dropcmds.c */
 extern void RemoveObjects(DropStmt *stmt);
@@ -144,7 +145,10 @@ extern void ImportForeignSchema(ImportForeignSchemaStmt *stmt);
 extern Datum transformGenericOptions(Oid catalogId,
 						Datum oldOptions,
 						List *options,
-						Oid fdwvalidator);
+						Oid fdwvalidator,
+						bool skipValidate);
+extern Datum TransformGPFTDistOptionsToTextDatum(Oid catalogId, Oid fdwvalidator, const List* distoptions);
+extern struct GPFTDistOptionsInfo *TransformTextDatumToGPFTDistOptions(Datum options);
 
 /* commands/amcmds.c */
 extern ObjectAddress CreateAccessMethod(CreateAmStmt *stmt);

@@ -447,9 +447,10 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 
 	/*
 	 * Transform DISTRIBUTED BY (or construct a default one, if not given
-	 * explicitly). Not for foreign tables, though.
+	 * explicitly).
+	 * For foreign table, enable the DISTRIBUTED BY caluse and defutal to RANDOMLY.
 	 */
-	if (stmt->relKind == RELKIND_RELATION)
+	if (stmt->relKind == RELKIND_RELATION || cxt.isforeign)
 	{
 		int			numsegments = -1;
 
@@ -469,6 +470,9 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 		 */
 		if (stmt->is_part_child)
 			numsegments = stmt->distributedBy->numsegments;
+
+		if (cxt.isforeign)
+			bQuiet = true;
 
 		stmt->distributedBy = transformDistributedBy(&cxt, stmt->distributedBy,
 							   likeDistributedBy, bQuiet);
@@ -2118,7 +2122,7 @@ transformDistributedBy(CreateStmtContext *cxt,
 		distrkeys = likeDistributedBy->keyCols;
 	}
 
-	if (gp_create_table_random_default_distribution && NIL == distrkeys)
+	if ((gp_create_table_random_default_distribution || cxt->isforeign) && NIL == distrkeys)
 	{
 		Assert(NULL == likeDistributedBy);
 

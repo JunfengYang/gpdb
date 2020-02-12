@@ -2403,6 +2403,7 @@ typedef struct CreateForeignTableStmt
 	CreateStmt	base;
 	char	   *servername;
 	List	   *options;
+	List	   *distoptionsfunc;
 } CreateForeignTableStmt;
 
 /* ----------------------

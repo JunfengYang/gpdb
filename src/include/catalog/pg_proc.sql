@@ -436,3 +436,5 @@ CREATE FUNCTION gp_create_restore_point(text) RETURNS SETOF record LANGUAGE inte
 
 
 CREATE FUNCTION gp_exttable_fdw_handler(internal) RETURNS internal LANGUAGE internal IMMUTABLE STRICT AS 'exttable_fdw_handler' WITH (OID=5107, DESCRIPTION="handler for internal external table FDW");
+
+CREATE FUNCTION ft_comma_seperated_dist_options(_text) RETURNS ft_distoptions LANGUAGE internal IMMUTABLE STRICT AS 'comma_seperated_dist_options' WITH (OID=3346, DESCRIPTION="foreign table distribut options for segments");

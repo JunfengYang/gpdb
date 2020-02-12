@@ -240,6 +240,20 @@ typedef struct FdwRoutine
 
 } FdwRoutine;
 
+typedef struct GPFTDistOptionElem
+{
+	NodeTag		type;
+
+	int		contentId;	/* Master is not allowed */
+	List   *options;
+} GPFTDistOptionElem;
+
+typedef struct GPFTDistOptionsInfo
+{
+	NodeTag		type;
+
+	List	   *distOptions;	/* Each element in the list is a GPFTDistOptionElem */
+} GPFTDistOptionsInfo;
 
 /* Functions in foreign/foreign.c */
 extern FdwRoutine *GetFdwRoutine(Oid fdwhandler);

@@ -372,6 +372,32 @@ fdw_handler_out(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();			/* keep compiler quiet */
 }
 
+/*
+ * ft_distoptions_in		- input routine for pseudo-type FT_DISTOPTIONS.
+ */
+Datum
+ft_distoptions_in(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("cannot accept a value of type ft_distoptions_in")));
+
+	PG_RETURN_VOID();			/* keep compiler quiet */
+}
+
+/*
+ * fdw_distoptions_out		- output routine for pseudo-type FT_DISTOPTIONS.
+ */
+Datum
+ft_distoptions_out(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("cannot display a value of type fdw_distoptions_out")));
+
+	PG_RETURN_VOID();			/* keep compiler quiet */
+}
+
 
 /*
  * index_am_handler_in		- input routine for pseudo-type INDEX_AM_HANDLER.

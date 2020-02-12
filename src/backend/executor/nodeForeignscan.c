@@ -29,6 +29,7 @@
 #include "utils/rel.h"
 
 #include "optimizer/var.h"
+#include "cdb/cdbvars.h"
 
 static TupleTableSlot *ForeignNext(ForeignScanState *node);
 static bool ForeignRecheck(ForeignScanState *node, TupleTableSlot *slot);
@@ -247,13 +248,18 @@ ExecInitForeignScan(ForeignScan *node, EState *estate, int eflags)
 		outerPlanState(scanstate) =
 			ExecInitNode(outerPlan(node), estate, eflags);
 
+	ParseDistributedOptionsForSegment(estate, currentRelation->rd_id);
+	ForeignTable *ft = GetForeignTable(currentRelation->rd_id);
 	/*
 	 * Tell the FDW to initialize the scan.
 	 */
 	if (node->operation != CMD_SELECT)
 		fdwroutine->BeginDirectModify(scanstate, eflags);
 	else
-		fdwroutine->BeginForeignScan(scanstate, eflags);
+	{
+		if (ft->exec_location == FTEXECLOCATION_MASTER || Gp_role == GP_ROLE_EXECUTE)
+			fdwroutine->BeginForeignScan(scanstate, eflags);
+	}
 
 	return scanstate;
 }
@@ -269,12 +275,14 @@ ExecEndForeignScan(ForeignScanState *node)
 {
 	ForeignScan *plan = (ForeignScan *) node->ss.ps.plan;
 
+	ForeignTable *ft = GetForeignTable(RelationGetRelid(node->ss.ss_currentRelation));
 	/* Let the FDW shut down */
 	if (plan->operation != CMD_SELECT)
 		node->fdwroutine->EndDirectModify(node);
 	else
 	{
-		if (!node->is_squelched)
+		if (!node->is_squelched && 
+			(ft->exec_location == FTEXECLOCATION_MASTER || Gp_role == GP_ROLE_EXECUTE))
 			node->fdwroutine->EndForeignScan(node);
 	}
 

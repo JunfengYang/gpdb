@@ -606,6 +606,9 @@ typedef enum NodeTag
 	T_TIDBitmap,				/* in nodes/tidbitmap.h */
 	T_InlineCodeBlock,			/* in nodes/parsenodes.h */
 	T_FdwRoutine,				/* in foreign/fdwapi.h */
+	T_GPFTDistOptionElem,		/* in foreign/fdwapi.h */
+	T_GPFTDistOptionsInfo,		/* in foreign/fdwapi.h */
+	T_GPFTOptions,				/* in foreign/foreign.h */
 	T_TsmRoutine,				/* in access/tsmapi.h */
 	T_IndexAmRoutine,			/* in access/amapi.h */
 	T_ForeignKeyCacheInfo,		/* in utils/rel.h */

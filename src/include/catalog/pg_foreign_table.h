@@ -30,9 +30,11 @@ CATALOG(pg_foreign_table,3118) BKI_WITHOUT_OIDS
 {
 	Oid			ftrelid;		/* OID of foreign table */
 	Oid			ftserver;		/* OID of foreign server */
+	Oid			ftdistoptionsfunc;	/* OID of OPTION HANDLER function */
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		ftoptions[1];	/* FDW-specific options */
+	text		gpftdistoptions[1];/* MPP FDW-specific options */
 #endif
 } FormData_pg_foreign_table;
 
@@ -48,9 +50,11 @@ typedef FormData_pg_foreign_table *Form_pg_foreign_table;
  * ----------------
  */
 
-#define Natts_pg_foreign_table					3
+#define Natts_pg_foreign_table					5
 #define Anum_pg_foreign_table_ftrelid			1
 #define Anum_pg_foreign_table_ftserver			2
-#define Anum_pg_foreign_table_ftoptions			3
+#define Anum_pg_foreign_table_ftdistoptionsfunc	3
+#define Anum_pg_foreign_table_ftoptions			4
+#define Anum_pg_foreign_table_gpftdistoptions	5
 
 #endif   /* PG_FOREIGN_TABLE_H */

@@ -13,7 +13,10 @@
 #ifndef FOREIGN_H
 #define FOREIGN_H
 
+#include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
+
+struct GPFTDistOptionsInfo;	/* in fdwapi.h */
 
 
 /* Helper for obtaining username for user mapping */
@@ -67,10 +70,16 @@ typedef struct ForeignTable
 {
 	Oid			relid;			/* relation Oid */
 	Oid			serverid;		/* server Oid */
+	Oid			distoptionsfunc;/* options distribution function Oid */
 	List	   *options;		/* ftoptions as DefElem list */
 	char		exec_location;  /* execute on MASTER, ANY or ALL SEGMENTS, Greenplum MPP specific */
+	struct GPFTDistOptionsInfo *ftdistoptiondinfo;	/* GPFTDistOptionsInfo contains options for each segments. */
 } ForeignTable;
 
+
+extern struct GPFTDistOptionsInfo *GetGPFTDistOptionsInfo(Oid distoptionsfunc, Datum options);
+
+extern void ParseDistributedOptionsForSegment(EState *estate, Oid relid);
 
 extern char SeparateOutMppExecute(List **options);
 extern ForeignServer *GetForeignServer(Oid serverid);

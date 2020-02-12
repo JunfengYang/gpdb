@@ -714,6 +714,8 @@ DATA(insert OID = 3500 ( anyenum		PGNSP PGUID  4 t p P f t \054 0 0 0 anyenum_in
 #define ANYENUMOID		3500
 DATA(insert OID = 3115 ( fdw_handler	PGNSP PGUID  4 t p P f t \054 0 0 0 fdw_handler_in fdw_handler_out - - - - - i p f 0 -1 0 0 _null_ _null_ _null_ ));
 #define FDW_HANDLEROID	3115
+DATA(insert OID = 3343 ( ft_distoptions	PGNSP PGUID  4 t p P f t \054 0 0 0 ft_distoptions_in ft_distoptions_out - - - - - i p f 0 -1 0 0 _null_ _null_ _null_ ));
+#define FT_DISTOPTIONSOID	3343
 DATA(insert OID = 325 ( index_am_handler	PGNSP PGUID  4 t p P f t \054 0 0 0 index_am_handler_in index_am_handler_out - - - - - i p f 0 -1 0 0 _null_ _null_ _null_ ));
 #define INDEX_AM_HANDLEROID 325
 DATA(insert OID = 3310 ( tsm_handler	PGNSP PGUID  4 t p P f t \054 0 0 0 tsm_handler_in tsm_handler_out - - - - - i p f 0 -1 0 0 _null_ _null_ _null_ ));

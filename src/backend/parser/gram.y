@@ -358,7 +358,7 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 
 %type <list>	func_name handler_name qual_Op qual_all_Op subquery_Op
 				opt_class opt_inline_handler opt_validator validator_clause
-				opt_collate
+				opt_collate opt_options_handler
 
 %type <range>	qualified_name insert_target OptConstrFromTable
 
@@ -572,7 +572,7 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 %type <boolean> constraints_set_mode
 %type <str>		OptTableSpace OptConsTableSpace
 %type <node>	OptTableSpaceOwner
-%type <node>    DistributedBy OptDistributedBy 
+%type <node>    DistributedBy OptDistributedBy FTOptDistributedBy
 %type <ival>	TabPartitionByType OptTabPartitionRangeInclusive
 %type <node>	OptTabPartitionBy TabSubPartitionBy TabSubPartition
 				tab_part_val tab_part_val_no_paran
@@ -4918,6 +4918,25 @@ OptDistributedBy:   DistributedBy			{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
+FTOptDistributedBy:   DISTRIBUTED RANDOMLY
+			{
+				DistributedBy *distributedBy = makeNode(DistributedBy);
+				distributedBy->ptype = POLICYTYPE_PARTITIONED;
+				distributedBy->numsegments = -1;
+				distributedBy->keyCols = NIL;
+				$$ = (Node *)distributedBy;
+			}
+			| DISTRIBUTED REPLICATED
+			{
+				DistributedBy *distributedBy = makeNode(DistributedBy);
+				distributedBy->ptype = POLICYTYPE_REPLICATED;
+				distributedBy->numsegments = -1;
+				distributedBy->keyCols = NIL;
+				$$ = (Node *)distributedBy;
+			}
+			|  /*EMPTY*/								{ $$ = NULL; }
+		;
+
 /* START PARTITION RULES */
 
 OptTabPartitionColumnEncList: TabPartitionColumnEncList { $$ = $1; }
@@ -6109,6 +6128,11 @@ opt_validator:
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
+opt_options_handler:
+			OPTION HANDLER handler_name				{ $$ = $3; }
+			| /*EMPTY*/								{ $$ = NIL; }
+		;
+
 DropPLangStmt:
 			DROP opt_procedural LANGUAGE NonReservedWord_or_Sconst opt_drop_behavior
 				{
@@ -6776,13 +6800,15 @@ AlterForeignServerStmt: ALTER SERVER name foreign_server_version alter_generic_o
 CreateForeignTableStmt:
 		CREATE FOREIGN TABLE qualified_name
 			'(' OptTableElementList ')'
-			OptInherit SERVER name create_generic_options
+			OptInherit FTOptDistributedBy SERVER name create_generic_options
+			opt_options_handler
 				{
 					CreateForeignTableStmt *n = makeNode(CreateForeignTableStmt);
 					$4->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $4;
 					n->base.tableElts = $6;
 					n->base.inhRelations = $8;
+					n->base.distributedBy = (DistributedBy *) $9;
 					n->base.ofTypename = NULL;
 					n->base.constraints = NIL;
 					n->base.options = NIL;
@@ -6790,19 +6816,22 @@ CreateForeignTableStmt:
 					n->base.tablespacename = NULL;
 					n->base.if_not_exists = false;
 					/* FDW-specific data */
-					n->servername = $10;
-					n->options = $11;
+					n->servername = $11;
+					n->options = $12;
+					n->distoptionsfunc = $13;
 					$$ = (Node *) n;
 				}
 		| CREATE FOREIGN TABLE IF_P NOT EXISTS qualified_name
 			'(' OptTableElementList ')'
-			OptInherit SERVER name create_generic_options
+			OptInherit FTOptDistributedBy SERVER name create_generic_options
+			opt_options_handler
 				{
 					CreateForeignTableStmt *n = makeNode(CreateForeignTableStmt);
 					$7->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $7;
 					n->base.tableElts = $9;
 					n->base.inhRelations = $11;
+					n->base.distributedBy = (DistributedBy *) $12;
 					n->base.ofTypename = NULL;
 					n->base.constraints = NIL;
 					n->base.options = NIL;
@@ -6810,8 +6839,9 @@ CreateForeignTableStmt:
 					n->base.tablespacename = NULL;
 					n->base.if_not_exists = true;
 					/* FDW-specific data */
-					n->servername = $13;
-					n->options = $14;
+					n->servername = $14;
+					n->options = $15;
+					n->distoptionsfunc = $16;
 					$$ = (Node *) n;
 				}
 		;

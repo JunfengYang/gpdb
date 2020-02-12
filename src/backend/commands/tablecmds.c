@@ -795,7 +795,20 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		policy = intoPolicy;
 	}
 	else
-		policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
+	{
+		if (IsA(stmt, CreateForeignTableStmt))
+		{
+			List *options = list_copy(((CreateForeignTableStmt *)stmt)->options);
+			char exec_location = SeparateOutMppExecute(&options);
+			if (exec_location == FTEXECLOCATION_MASTER || exec_location == FTEXECLOCATION_ANY)
+				policy = NULL;
+			else
+				policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
+		}
+		else
+			policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
+	}
+		
 
 	/*
 	 * Find columns with default values and prepare for insertion of the
@@ -11921,7 +11934,8 @@ ATExecAlterColumnGenericOptions(Relation rel,
 	datum = transformGenericOptions(AttributeRelationId,
 									datum,
 									options,
-									fdw->fdwvalidator);
+									fdw->fdwvalidator,
+									false);
 
 	if (PointerIsValid(DatumGetPointer(datum)))
 		repl_val[Anum_pg_attribute_attfdwoptions - 1] = datum;
@@ -19468,7 +19482,8 @@ ATExecGenericOptions(Relation rel, List *options)
 	datum = transformGenericOptions(ForeignTableRelationId,
 									datum,
 									options,
-									fdw->fdwvalidator);
+									fdw->fdwvalidator,
+									false);
 
 	if (PointerIsValid(DatumGetPointer(datum)))
 		repl_val[Anum_pg_foreign_table_ftoptions - 1] = datum;
@@ -19476,6 +19491,8 @@ ATExecGenericOptions(Relation rel, List *options)
 		repl_null[Anum_pg_foreign_table_ftoptions - 1] = true;
 
 	repl_repl[Anum_pg_foreign_table_ftoptions - 1] = true;
+
+	repl_null[Anum_pg_foreign_table_gpftdistoptions - 1] = true;
 
 	/* Everything looks good - update the tuple */
 
