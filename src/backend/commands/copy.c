@@ -4603,7 +4603,7 @@ BeginCopyFrom(Relation rel,
 			 cstate->rel && cstate->rel->rd_cdbpolicy &&
 			 cstate->rel->rd_cdbpolicy->ptype != POLICYTYPE_ENTRY)
 		cstate->dispatch_mode = COPY_DISPATCH;
-	else if (Gp_role == GP_ROLE_EXECUTE)
+	else if (Gp_role == GP_ROLE_EXECUTE && cstate->on_segment)
 		cstate->dispatch_mode = COPY_EXECUTOR;
 	else
 		cstate->dispatch_mode = COPY_DIRECT;
