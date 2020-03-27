@@ -29,6 +29,7 @@
 #include "cdb/cdbvars.h"
 #include "catalog/pg_exttable.h"
 #include "catalog/pg_foreign_server.h"
+#include "executor/executor.h"
 #include "foreign/fdwapi.h"
 #include "nodes/execnodes.h"
 #include "nodes/relation.h"
@@ -45,7 +46,23 @@ typedef struct
 {
 	FileScanDescData *ess_ScanDesc;
 
+	/* Used to open the external source, push down qual and projection columns.
+	 * Currently, this is only used for custom protocols.
+	 * The targetlist from external souce is not changed, only fill null for
+	 * some unused columns.
+	 */
 	ExternalSelectDesc externalSelectDesc;
+
+	/*
+	 * For ETL purpose, the projection error should count in reject limit.
+	 * ExternalSelectDescData now is used to execute projection inside external
+	 * scan cover by single row error handling.
+	 * So once a row get projection error, the whole ETL task will not
+	 * get aborted.
+	 */
+	ProjectionInfo	   *projInfo;
+	List			   *quals;
+	ExprContext		   *exprContext;
 
 } exttable_fdw_state;
 
@@ -282,6 +299,23 @@ create_foreignscan_for_external_table(Oid relid, Index scanrelid,
 	return fscan;
 }
 
+/*
+ * SetupSrehForProjection - set up single row error handling for external table
+ * projection.
+ *
+ * And disable the projection in ExecScan.
+ */
+static void
+SetupSrehForProjection(exttable_fdw_state *fdw_state, PlanState *state)
+{
+	fdw_state->projInfo = state->ps_ProjInfo;
+	fdw_state->exprContext = state->ps_ExprContext;
+	fdw_state->quals = state->qual;
+
+	/* Disable projection in ExecScan */
+	state->ps_ProjInfo = NULL;
+	state->qual = NULL;
+}
 
 static void
 exttable_BeginForeignScan(ForeignScanState *node,
@@ -314,12 +348,11 @@ exttable_BeginForeignScan(ForeignScanState *node,
 										 externalscan_info->encoding,
 										 externalscan_info->extOptions);
 	externalSelectDesc = external_getnext_init(&node->ss.ps);
-	if (gp_external_enable_filter_pushdown)
-		externalSelectDesc->filter_quals = node->ss.ps.plan->qual;
 
 	fdw_state = palloc(sizeof(exttable_fdw_state));
 	fdw_state->ess_ScanDesc = currentScanDesc;
 	fdw_state->externalSelectDesc = externalSelectDesc;
+	SetupSrehForProjection(fdw_state, &node->ss.ps);
 
 	node->fdw_state = fdw_state;
 }
@@ -383,14 +416,61 @@ ExternalConstraintCheck(TupleTableSlot *slot, FileScanDesc scandesc, EState *est
 	return true;
 }
 
+/*
+ * ExecExternalProject - execute project for external table.
+ *
+ * For ETL purpose, if the projection belongs to the external table scan,
+ * handle the projection error for current row.
+ * So once a row get projection error, the whole ETL task will not
+ * get aborted.
+ */
+static TupleTableSlot *
+ExecExternalProject(ProjectionInfo *projInfo, CopyState cstate, bool *errSkipped /*out*/)
+{
+	TupleTableSlot * slot;
+	MemoryContext oldcontext = CurrentMemoryContext;
+
+	*errSkipped = false;
+	PG_TRY();
+	{
+		slot = ExecProject(projInfo, NULL);
+	}
+	PG_CATCH();
+	{
+		*errSkipped = true;
+		/*
+		 * We remove the ERRCODE_DATA_EXCEPTION error code check here to handle
+		 * project expression errors.
+		 * It's unlikely to catch none project expression errors here.
+		 * But if it does, abort will be postponed when reject limit reached.
+		 */
+		HANDLE_SINGLE_ROW_ERROR(cstate);
+		FlushErrorState();
+		MemoryContextSwitchTo(oldcontext);
+	}
+	PG_END_TRY();
+
+	if (*errSkipped)
+		ErrorIfRejectLimitReached(cstate->cdbsreh);
+
+	return slot;
+}
+
 static TupleTableSlot *
 exttable_IterateForeignScan(ForeignScanState *node)
 {
 	EState	   *estate = node->ss.ps.state;
 	exttable_fdw_state *fdw_state = (exttable_fdw_state *) node->fdw_state;
-	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	TupleTableSlot *slot;
 	HeapTuple	tuple;
 	MemoryContext oldcxt;
+	ExprContext *econtext;
+	List	   *qual;
+	ProjectionInfo *projInfo;
+
+	qual = fdw_state->quals;
+	projInfo = fdw_state->projInfo;
+	econtext = fdw_state->exprContext;
 
 	/*
 	 * XXX: ForeignNext() calls us in a short-lived memory context, which
@@ -404,12 +484,17 @@ exttable_IterateForeignScan(ForeignScanState *node)
 
 	for (;;)
 	{
+		slot = node->ss.ss_ScanTupleSlot;
 		tuple = external_getnext(fdw_state->ess_ScanDesc,
 								 ForwardScanDirection, /* FIXME: foreign scans don't support backward scans, I think? */
 								 fdw_state->externalSelectDesc);
-		if (!tuple)
+
+		CHECK_FOR_INTERRUPTS();
+		if (!tuple || QueryFinishPending)
 		{
 			ExecClearTuple(slot);
+			if (projInfo)
+				ExecClearTuple(projInfo->pi_slot);
 			break;
 		}
 
@@ -419,6 +504,29 @@ exttable_IterateForeignScan(ForeignScanState *node)
 			!ExternalConstraintCheck(slot, fdw_state->ess_ScanDesc, estate))
 			continue;
 
+		/*
+		 * ExecQual and do external project inside external table scan to handle
+		 * projection error for ETL.
+		 */
+		ResetExprContext(econtext);
+		econtext->ecxt_scantuple = slot;
+
+		if (!qual || ExecQual(qual, econtext, false))
+		{
+			bool errSkip = false;
+			if (projInfo)
+			{
+				slot = ExecExternalProject(
+					projInfo, fdw_state->ess_ScanDesc->fs_pstate, &errSkip /* out */);
+				if (errSkip)
+					continue;
+			}
+		}
+		else
+		{
+			InstrCountFiltered1(node, 1);
+			continue;
+		}
 		break;
 	}
 	MemoryContextSwitchTo(oldcxt);

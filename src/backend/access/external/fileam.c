@@ -477,7 +477,11 @@ external_getnext_init(PlanState *state)
 	ExternalSelectDesc
 		desc = (ExternalSelectDesc) palloc0(sizeof(ExternalSelectDescData));
 	if (state != NULL)
+	{
 		desc->projInfo = state->ps_ProjInfo;
+		desc->filter_quals = state->plan->qual;
+	}
+
 	return desc;
 }
 
@@ -796,65 +800,6 @@ pstate->line_buf.len = 0; \
 pstate->line_buf.data[0] = '\0'; \
 pstate->line_buf.cursor = 0;
 
-/*
- * A data error happened. This code block will always be inside a PG_CATCH()
- * block right when a higher stack level produced an error. We handle the error
- * by checking which error mode is set (SREH or all-or-nothing) and do the right
- * thing accordingly. Note that we MUST have this code in a macro (as opposed
- * to a function) as elog_dismiss() has to be inlined with PG_CATCH in order to
- * access local error state variables.
- */
-#define FILEAM_HANDLE_ERROR \
-if (pstate->errMode == ALL_OR_NOTHING) \
-{ \
-	/* re-throw error and abort */ \
-	PG_RE_THROW(); \
-} \
-else \
-{ \
-	/* SREH - release error state */ \
-\
-	ErrorData	*edata; \
-	MemoryContext oldcontext;\
-\
-	/* SREH must only handle data errors. all other errors must not be caught */\
-	if(ERRCODE_TO_CATEGORY(elog_geterrcode()) != ERRCODE_DATA_EXCEPTION)\
-	{\
-		PG_RE_THROW(); \
-	}\
-\
-	/* save a copy of the error info */ \
-	oldcontext = MemoryContextSwitchTo(pstate->cdbsreh->badrowcontext);\
-	edata = CopyErrorData();\
-	MemoryContextSwitchTo(oldcontext);\
-\
-	if (!elog_dismiss(DEBUG5)) \
-		PG_RE_THROW(); /* <-- hope to never get here! */ \
-\
-	truncateEol(&pstate->line_buf, pstate->eol_type); \
-	pstate->cdbsreh->rawdata = pstate->line_buf.data; \
-	pstate->cdbsreh->is_server_enc = pstate->line_buf_converted; \
-	pstate->cdbsreh->linenumber = pstate->cur_lineno; \
-	pstate->cdbsreh->processed++; \
-\
-	/* set the error message. Use original msg and add column name if available */ \
-	if (pstate->cur_attname)\
-	{\
-		pstate->cdbsreh->errmsg = psprintf("%s, column %s", \
-				edata->message, \
-				pstate->cur_attname); \
-	}\
-	else\
-	{\
-		pstate->cdbsreh->errmsg = pstrdup(edata->message); \
-	}\
-\
-	HandleSingleRowError(pstate->cdbsreh); \
-	FreeErrorData(edata);\
-	if (!IsRejectLimitReached(pstate->cdbsreh)) \
-		pfree(pstate->cdbsreh->errmsg); \
-}
-
 static HeapTuple
 externalgettup_defined(FileScanDesc scan)
 {
@@ -977,7 +922,7 @@ externalgettup_custom(FileScanDesc scan)
 					}
 				}
 
-				FILEAM_HANDLE_ERROR;
+				FILEAM_HANDLE_ERROR(pstate);
 				FlushErrorState();
 
 				MemoryContextSwitchTo(oldctxt);
@@ -1299,7 +1244,12 @@ open_external_readable_source(FileScanDesc scan, ExternalSelectDesc desc)
 							  scan->fs_scancounter,
 							  scan->fs_custom_formatter_params);
 
-	/* actually open the external source */
+	/* actually open the external source
+	 *
+	 * ExternalSelectDesc was used to pushdown quals columns and projection
+	 * columns to remote server to reduce data transfer for PXF here.
+	 * But PXF is using FDW now. Let's keep this ability for external table fdw.
+	 */
 	scan->fs_file = url_fopen(scan->fs_uri,
 							  false /* for read */ ,
 							  &extvar,

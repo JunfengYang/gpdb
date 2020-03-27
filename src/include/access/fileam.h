@@ -95,4 +95,68 @@ extern char *make_command(const char *cmd, extvar_t *ev);
 extern List *parseCopyFormatString(Relation rel, char *fmtstr, char fmttype);
 extern List *appendCopyEncodingOption(List *copyFmtOpts, int encoding);
 
+/*
+ * A data error happened. This code block will always be inside a PG_CATCH()
+ * block right when a higher stack level produced an error. We handle the error
+ * by checking which error mode is set (SREH or all-or-nothing) and do the right
+ * thing accordingly. Note that we MUST have this code in a macro (as opposed
+ * to a function) as elog_dismiss() has to be inlined with PG_CATCH in order to
+ * access local error state variables.
+ */
+#define CHECK_DATA_EXCEPTION \
+/* SREH must only handle data errors. all other errors must not be caught */\
+if(ERRCODE_TO_CATEGORY(elog_geterrcode()) != ERRCODE_DATA_EXCEPTION)\
+{\
+	PG_RE_THROW(); \
+}
+
+#define HANDLE_SINGLE_ROW_ERROR(pstate) \
+if (pstate->errMode == ALL_OR_NOTHING) \
+{ \
+	/* re-throw error and abort */ \
+	PG_RE_THROW(); \
+} \
+else \
+{ \
+	/* SREH - release error state */ \
+\
+	ErrorData	*edata; \
+	MemoryContext oldcontext;\
+\
+	/* save a copy of the error info */ \
+	oldcontext = MemoryContextSwitchTo(pstate->cdbsreh->badrowcontext);\
+	edata = CopyErrorData();\
+\
+	if (!elog_dismiss(DEBUG5)) \
+		PG_RE_THROW(); /* <-- hope to never get here! */ \
+\
+	truncateEol(&pstate->line_buf, pstate->eol_type); \
+	pstate->cdbsreh->rawdata = pstate->line_buf.data; \
+	pstate->cdbsreh->is_server_enc = pstate->line_buf_converted; \
+	pstate->cdbsreh->linenumber = pstate->cur_lineno; \
+	pstate->cdbsreh->processed++; \
+\
+	/* set the error message. Use original msg and add column name if available */ \
+	if (pstate->cur_attname)\
+	{\
+		pstate->cdbsreh->errmsg = psprintf("%s, column %s", \
+				edata->message, \
+				pstate->cur_attname); \
+	}\
+	else\
+	{\
+		pstate->cdbsreh->errmsg = pstrdup(edata->message); \
+	}\
+\
+	HandleSingleRowError(pstate->cdbsreh); \
+	FreeErrorData(edata);\
+	if (!IsRejectLimitReached(pstate->cdbsreh)) \
+		pfree(pstate->cdbsreh->errmsg); \
+	MemoryContextSwitchTo(oldcontext);\
+}
+
+#define FILEAM_HANDLE_ERROR(pstate) \
+CHECK_DATA_EXCEPTION; \
+HANDLE_SINGLE_ROW_ERROR(pstate)
+
 #endif   /* FILEAM_H */
