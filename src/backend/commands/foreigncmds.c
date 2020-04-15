@@ -21,6 +21,9 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/oid_dispatch.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_extprotocol.h"
+#include "catalog/pg_exttable.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
@@ -41,6 +44,7 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/uri.h"
 
 
 typedef struct
@@ -1494,7 +1498,7 @@ RemoveUserMappingById(Oid umId)
  * call after DefineRelation().
  */
 void
-CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission_check)
+CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid)
 {
 	Relation	ftrel;
 	Datum		ftoptions;
@@ -1526,11 +1530,155 @@ CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission
 	 * get the actual FDW for option validation etc.
 	 */
 	server = GetForeignServerByName(stmt->servername, false);
-	if (!skip_permission_check)
+	if (strcmp(stmt->servername, PG_EXTTABLE_SERVER_NAME) != 0)
 	{
 		aclresult = pg_foreign_server_aclcheck(server->serverid, ownerId, ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, ACL_KIND_FOREIGN_SERVER, server->servername);
+	}
+	else if (!superuser() && Gp_role == GP_ROLE_DISPATCH)
+	{
+		/*----------
+		 * check permissions to create this external table.
+		 *
+		 * - Always allow if superuser.
+		 * - Never allow EXECUTE or 'file' exttables if not superuser.
+		 * - Allow http, gpfdist or gpfdists tables if pg_auth has the right
+		 *	 permissions for this role and for this type of table
+		 *----------
+		 */
+		ListCell *lc;
+		bool iswritable = false;
+		foreach(lc, stmt->options)
+		{
+			DefElem    *def = (DefElem *) lfirst(lc);
+
+			if (pg_strcasecmp(def->defname, "command") == 0)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						 errmsg("must be superuser to create an EXECUTE external web table")));
+			}
+			else if (pg_strcasecmp(def->defname, "is_writable") == 0)
+			{
+				iswritable = defGetBoolean(def);
+			}
+		}
+
+		foreach(lc, stmt->options)
+		{
+			DefElem    *def = (DefElem *) lfirst(lc);
+
+			if (pg_strcasecmp(def->defname, "location_uris") == 0)
+			{
+				List *location_list = tokenizeLocationUris(defGetString(def));
+				ListCell   *first_uri = list_head(location_list);
+				Value	   *v = lfirst(first_uri);
+				char	   *uri_str = pstrdup(v->val.str);
+				Uri		   *uri = ParseExternalTableUri(uri_str);
+
+				/* Assert(exttypeDesc->exttabletype == EXTTBL_TYPE_LOCATION); */
+
+				if (uri->protocol == URI_FILE)
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+							 errmsg("must be superuser to create an external table with a file protocol")));
+				}
+				else
+				{
+					/*
+					 * Check if this role has the proper 'gpfdist', 'gpfdists' or
+					 * 'http' permissions in pg_auth for creating this table.
+					 */
+
+					bool		isnull;
+					HeapTuple	tuple;
+
+					tuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(GetUserId()));
+					if (!HeapTupleIsValid(tuple))
+						ereport(ERROR,
+								(errcode(ERRCODE_UNDEFINED_OBJECT),
+								 errmsg("role \"%s\" does not exist (in DefineExternalRelation)",
+										GetUserNameFromId(GetUserId(), false))));
+
+					if ((uri->protocol == URI_GPFDIST || uri->protocol == URI_GPFDISTS) && iswritable)
+					{
+						Datum	 	d_wextgpfd;
+						bool		createwextgpfd;
+
+						d_wextgpfd = SysCacheGetAttr(AUTHOID, tuple,
+													 Anum_pg_authid_rolcreatewextgpfd,
+													 &isnull);
+						createwextgpfd = (isnull ? false : DatumGetBool(d_wextgpfd));
+
+						if (!createwextgpfd)
+							ereport(ERROR,
+									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+									 errmsg("permission denied: no privilege to create a writable gpfdist(s) external table")));
+					}
+					else if ((uri->protocol == URI_GPFDIST || uri->protocol == URI_GPFDISTS) && !iswritable)
+					{
+						Datum		d_rextgpfd;
+						bool		createrextgpfd;
+
+						d_rextgpfd = SysCacheGetAttr(AUTHOID, tuple,
+													 Anum_pg_authid_rolcreaterextgpfd,
+													 &isnull);
+						createrextgpfd = (isnull ? false : DatumGetBool(d_rextgpfd));
+
+						if (!createrextgpfd)
+							ereport(ERROR,
+									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+									 errmsg("permission denied: no privilege to create a readable gpfdist(s) external table")));
+					}
+					else if (uri->protocol == URI_HTTP && !iswritable)
+					{
+						Datum		d_exthttp;
+						bool		createrexthttp;
+
+						d_exthttp = SysCacheGetAttr(AUTHOID, tuple,
+													Anum_pg_authid_rolcreaterexthttp,
+													&isnull);
+						createrexthttp = (isnull ? false : DatumGetBool(d_exthttp));
+
+						if (!createrexthttp)
+							ereport(ERROR,
+									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+									 errmsg("permission denied: no privilege to create an http external table")));
+					}
+					else if (uri->protocol == URI_CUSTOM)
+					{
+						Oid			ownerId = GetUserId();
+						char	   *protname = uri->customprotocol;
+						Oid			ptcId = get_extprotocol_oid(protname, false);
+						AclResult	aclresult;
+
+						/* Check we have the right permissions on this protocol */
+						if (!pg_extprotocol_ownercheck(ptcId, ownerId))
+						{
+							AclMode		mode = (iswritable ? ACL_INSERT : ACL_SELECT);
+
+							aclresult = pg_extprotocol_aclcheck(ptcId, ownerId, mode);
+
+							if (aclresult != ACLCHECK_OK)
+								aclcheck_error(aclresult, ACL_KIND_EXTPROTOCOL, protname);
+						}
+					}
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_INTERNAL_ERROR),
+								 errmsg("internal error in DefineExternalRelation"),
+								 errdetail("Protocol is %d, writable is %d.",
+										   uri->protocol, iswritable)));
+
+					ReleaseSysCache(tuple);
+				}
+				FreeExternalTableUri(uri);
+				pfree(uri_str);
+				break;
+			}
+		}
 	}
 
 	fdw = GetForeignDataWrapper(server->fdwid);

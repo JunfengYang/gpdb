@@ -1283,8 +1283,7 @@ ProcessUtilitySlow(Node *parsetree,
 													 true,
 													 NULL);
 							CreateForeignTable((CreateForeignTableStmt *) stmt,
-											   address.objectId,
-											   false /* skip_permission_checks */);
+											   address.objectId);
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
