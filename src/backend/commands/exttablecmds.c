@@ -693,11 +693,12 @@ transformFormatOpts(char formattype, List *formatOpts, int numcols, bool iswrita
 						   numcols,
 						   false /* is_copy */);
 
-		if (fmttype_is_csv(formattype))
-			cslist = lappend(cslist, makeDefElem("quote", (Node *) makeString(cstate->quote)));
+		/* keep the same order with the original pg_exttable catalog's fmtopt field */
 		cslist = lappend(cslist, makeDefElem("delimiter", (Node *) makeString(cstate->delim)));
 		cslist = lappend(cslist, makeDefElem("null", (Node *) makeString(cstate->null_print)));
 		cslist = lappend(cslist, makeDefElem("escape", (Node *) makeString(cstate->escape)));
+		if (fmttype_is_csv(formattype))
+			cslist = lappend(cslist, makeDefElem("quote", (Node *) makeString(cstate->quote)));
 		if (cstate->header_line)
 			cslist = lappend(cslist, makeDefElem("header", (Node *) makeString("true")));
 		if (cstate->fill_missing)
@@ -918,18 +919,7 @@ GetExtTableEntryIfExists(Oid relid)
 	HeapTuple	fttuple;
 	ExtTableEntry *extentry;
 	bool		isNull;
-	ListCell	*lc;
-	char		*arg;
-	List		*entryOptions = NIL;
 	List		*ftoptions_list = NIL;;
-	bool		fmtcode_found = false;
-	bool		rejectlimit_found = false;
-	bool		rejectlimittype_found = false;
-	bool		logerrors_found = false;
-	bool		encoding_found = false;
-	bool		iswritable_found = false;
-	bool		locationuris_found = false;
-	bool		command_found = false;
 
 	pg_foreign_table_rel = heap_open(ForeignTableRelationId, RowExclusiveLock);
 
@@ -950,8 +940,6 @@ GetExtTableEntryIfExists(Oid relid)
 		return NULL;
 	}
 
-	extentry = (ExtTableEntry *) palloc0(sizeof(ExtTableEntry));
-
 	/* get the foreign table options */
 	Datum ftoptions = heap_getattr(fttuple,
 						   Anum_pg_foreign_table_ftoptions,
@@ -968,7 +956,34 @@ GetExtTableEntryIfExists(Oid relid)
 		ftoptions_list = untransformRelOptions(ftoptions);
 	}
 
-	foreach(lc, ftoptions_list)
+	extentry = GetExtFromForeignTableOptions(ftoptions_list, relid);
+
+	/* Finish up scan and close catalogs */
+	systable_endscan(ftscan);
+	heap_close(pg_foreign_table_rel, RowExclusiveLock);
+
+	return extentry;
+}
+
+ExtTableEntry *
+GetExtFromForeignTableOptions(List *ftoptons, Oid relid)
+{
+	ExtTableEntry	   *extentry;
+	ListCell		   *lc;
+	List			   *entryOptions = NIL;
+	char			   *arg;
+	bool				fmtcode_found = false;
+	bool				rejectlimit_found = false;
+	bool				rejectlimittype_found = false;
+	bool				logerrors_found = false;
+	bool				encoding_found = false;
+	bool				iswritable_found = false;
+	bool				locationuris_found = false;
+	bool				command_found = false;
+
+	extentry = (ExtTableEntry *) palloc0(sizeof(ExtTableEntry));
+
+	foreach(lc, ftoptons)
 	{
 		DefElem    *def = (DefElem *) lfirst(lc);
 
@@ -1083,10 +1098,6 @@ GetExtTableEntryIfExists(Oid relid)
 	Insist(PG_VALID_ENCODING(extentry->encoding));
 
 	extentry->options = entryOptions;
-
-	/* Finish up scan and close catalogs */
-	systable_endscan(ftscan);
-	heap_close(pg_foreign_table_rel, RowExclusiveLock);
 
 	return extentry;
 }
