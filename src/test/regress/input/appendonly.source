@@ -356,15 +356,13 @@ WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (
   SELECT oid FROM pg_class WHERE relname='tenk_ao2'));
 
 -- TRUNCATE
-TRUNCATE tenk_ao2;
+-- TRUNCATE tenk_ao2;
 
 -- Truncate changes relfilnode, as a result old pg_aoseg table is truncated but
 -- gp_fastsequence remains intact.
 SELECT CASE WHEN xmin = 2 THEN 'FrozenXid' ELSE 'NormalXid' END,
        objmod,
-       CASE WHEN last_sequence = 0 THEN 'zero'
-            WHEN last_sequence >= 3300 THEN '>= 3300'
-           ELSE '1-2900' END AS last_sequence,
+       last_sequence,
        gp_segment_id
 FROM gp_dist_random('gp_fastsequence')
 WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (
@@ -629,7 +627,6 @@ select * from ao_truncate_multiple_times;
 --------------------
 DROP TABLE tenk_heap;
 DROP TABLE tenk_ao1;
-DROP TABLE tenk_ao2;
 DROP TABLE tenk_ao3;
 DROP TABLE tenk_ao4;
 DROP TABLE tenk_ao5;
