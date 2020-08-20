@@ -1487,7 +1487,9 @@ vac_update_datfrozenxid(void)
 	if (dirty)
 	{
 		heap_inplace_update(relation, tuple);
-		SIMPLE_FAULT_INJECTOR("vacuum_update_dat_frozen_xid");
+		FaultInjector_InjectFaultIfSet(
+			"vacuum_update_dat_frozen_xid", DDLNotSpecified,
+			NameStr(dbform->datname), "");
 	}
 
 	heap_freetuple(tuple);

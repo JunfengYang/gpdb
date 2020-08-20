@@ -144,7 +144,7 @@ rollback;
 select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables_internal where relid = 'table_for_truncate_abort'::regclass;
 
--- Disable AUTOVACUUM launcher
-ALTER SYSTEM SET autovacuum = off;
+-- Reset AUTOVACUUM launcher
+ALTER SYSTEM RESET autovacuum;
 select pg_reload_conf();
 

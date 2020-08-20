@@ -48,6 +48,13 @@ function make_cluster() {
   export STATEMENT_MEM=250MB
   pushd gpdb_src/gpAux/gpdemo
   su gpadmin -c "source /usr/local/greenplum-db-devel/greenplum_path.sh; make create-demo-cluster"
+  su gpadmin -c bash -- -e <<EOF
+  source /usr/local/greenplum-db-devel/greenplum_path.sh
+  source $PWD/gpdemo-env.sh
+
+  gpconfig -c autovacuum -v on --masteronly
+  psql postgres -c "select * from pg_reload_conf()"
+EOF
 
   if [[ "$MAKE_TEST_COMMAND" =~ gp_interconnect_type=proxy ]]; then
     # generate the addresses for proxy mode
