@@ -70,6 +70,14 @@ insert into g1 values
 
 insert into l1 values (generate_series (1,10), generate_series (1,10), generate_series (1,10), generate_series (1,10));
 
+analyze t1;
+analyze t2;
+analyze t3;
+analyze t4;
+analyze t1n;
+analyze g1;
+analyze l1;
+
 --
 -- queries
 --

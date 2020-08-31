@@ -51,6 +51,7 @@ select gp_inject_fault('workfile_creation_failure', 'reset', 2);
 
 create table test_zlib (i int, j text);
 insert into test_zlib select i, i from generate_series(1,1000000) as i;
+analyze test_zlib;
 create table test_zlib_t1(i int, j int);
 
 set statement_mem='10MB';

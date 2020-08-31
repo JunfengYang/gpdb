@@ -397,6 +397,7 @@ where t4.thousand = t5.unique1 and ss.x1 = t4.tenthous and ss.x2 = t5.stringu1;
 --
 set enable_hashjoin = false;
 set enable_nestloop = true;
+ANALYZE tenk1;
 explain (costs off)
 select a.f1, b.f1, t.thousand, t.tenthous from
   tenk1 t,
@@ -842,12 +843,15 @@ create temp table nt3 (
 );
 
 insert into nt1 values (1,true,true);
+ANALYZE nt1;
 insert into nt1 values (2,true,false);
 insert into nt1 values (3,false,false);
 insert into nt2 values (1,1,true,true);
+ANALYZE nt2;
 insert into nt2 values (2,2,true,false);
 insert into nt2 values (3,3,false,false);
 insert into nt3 values (1,1,true);
+ANALYZE nt3;
 insert into nt3 values (2,2,false);
 insert into nt3 values (3,3,true);
 
@@ -1385,6 +1389,10 @@ INSERT INTO a VALUES (0, 0), (1, NULL);
 INSERT INTO b VALUES (0, 0), (1, NULL);
 INSERT INTO c VALUES (0), (1);
 INSERT INTO d VALUES (1,3), (2,2), (3,1);
+ANALYZE a;
+ANALYZE b;
+ANALYZE c;
+ANALYZE d;
 
 -- all three cases should be optimizable into a simple seqscan
 explain (costs off) SELECT a.* FROM a LEFT JOIN b ON a.b_id = b.id;

@@ -1,3 +1,6 @@
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+
 create or replace function junkloop(rel text, numiter int) returns int as $$
 declare
   sql text;
@@ -22,3 +25,7 @@ select pg_relation_size((select segrelid from pg_appendonly where relid = 'vfao'
 
 vacuum full vfao;
 select pg_relation_size((select segrelid from pg_appendonly where relid = 'vfao'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;
+
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

@@ -86,11 +86,13 @@ CREATE INDEX gpointind ON point_tbl USING gist (f1);
 
 CREATE TEMP TABLE gpolygon_tbl AS
     SELECT polygon(home_base) AS f1 FROM slow_emp4000;
+ANALYZE gpolygon_tbl;
 INSERT INTO gpolygon_tbl VALUES ( '(1000,0,0,1000)' );
 INSERT INTO gpolygon_tbl VALUES ( '(0,1000,1000,1000)' );
 
 CREATE TEMP TABLE gcircle_tbl AS
     SELECT circle(home_base) AS f1 FROM slow_emp4000;
+ANALYZE gcircle_tbl;
 
 CREATE INDEX ggpolygonind ON gpolygon_tbl USING gist (f1);
 
@@ -107,6 +109,7 @@ INSERT INTO quad_point_tbl
     SELECT '(333.0,400.0)'::point FROM generate_series(1,1000);
 
 INSERT INTO quad_point_tbl VALUES (NULL), (NULL), (NULL);
+ANALYZE quad_point_tbl;
 
 CREATE INDEX sp_quad_ind ON quad_point_tbl USING spgist (p);
 
@@ -121,6 +124,7 @@ INSERT INTO radix_text_tbl
     SELECT 'P0123456789abcdef' FROM generate_series(1,1000);
 INSERT INTO radix_text_tbl VALUES ('P0123456789abcde');
 INSERT INTO radix_text_tbl VALUES ('P0123456789abcdefF');
+ANALYZE radix_text_tbl;
 
 CREATE INDEX sp_radix_ind ON radix_text_tbl USING spgist (t);
 

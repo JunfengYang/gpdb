@@ -2,6 +2,8 @@
 
 -- Create an empty database to test in, because some of the gp_toolkit views
 -- are really slow, when there are a lot of objects in the database.
+alter system set autovacuum = off;
+select * from pg_reload_conf();
 create database toolkit_testdb;
 \c toolkit_testdb
 
@@ -26,6 +28,7 @@ partition p1 start('0') end('10') WITH (appendonly=true,checksum=true,compressle
 
 CREATE MATERIALIZED VIEW toolkit_matview AS SELECT * FROM toolkit_heap;
 CREATE MATERIALIZED VIEW toolkit_matview_nodata AS SELECT * FROM toolkit_heap WITH NO DATA;
+ANALYZE toolkit_matview;
 
 select count(iaotype),iaotype
 from gp_toolkit.__gp_is_append_only iao
@@ -420,3 +423,6 @@ reset session authorization;
 drop database toolkit_testdb;
 drop role toolkit_user1;
 drop role toolkit_admin;
+
+alter system reset autovacuum;
+select * from pg_reload_conf();

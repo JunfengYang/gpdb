@@ -1,3 +1,10 @@
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
 drop table if exists vfheap;
 create table vfheap (a, b, c) as
 select 1, i, repeat('x', 1000) from generate_series(1, 100)i distributed by (a);
@@ -34,5 +41,12 @@ select max(b), min(substring(c, 10, 1)) from vfheap;
  max | min 
 -----+-----
  100 | x
+(1 row)
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
 (1 row)
 

@@ -106,6 +106,7 @@ DROP SEQUENCE seq CASCADE;
 
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0;
 
@@ -137,6 +138,7 @@ DROP TABLE base_tbl CASCADE;
 
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT b AS bb, a AS aa FROM base_tbl WHERE a>0;
 CREATE VIEW rw_view2 AS SELECT aa AS aaa, bb AS bbb FROM rw_view1 WHERE aa<10;
@@ -170,6 +172,7 @@ DROP TABLE base_tbl CASCADE;
 
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0 OFFSET 0; -- not updatable without rules/triggers
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a<10;
@@ -258,6 +261,7 @@ DROP TABLE base_tbl CASCADE;
 
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0 OFFSET 0; -- not updatable without rules/triggers
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a<10;
@@ -373,6 +377,7 @@ DROP FUNCTION rw_view1_trig_fn();
 
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT b AS bb, a AS aa FROM base_tbl;
 
@@ -515,6 +520,7 @@ DROP TABLE base_tbl;
 
 CREATE TABLE base_tbl (a int, b int);
 INSERT INTO base_tbl VALUES (1,2), (4,5), (3,-3);
+ANALYZE base_tbl;
 
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl ORDER BY a+b;
 
@@ -747,6 +753,7 @@ CREATE VIEW rw_view1 AS
   WITH CHECK OPTION;
 
 INSERT INTO rw_view1 VALUES (5); -- ok
+ANALYZE base_tbl;
 INSERT INTO rw_view1 VALUES (15); -- should fail
 
 UPDATE rw_view1 SET a = a + 5; -- ok
@@ -959,6 +966,7 @@ DROP TABLE base_tbl CASCADE;
 
 CREATE TABLE base_tbl(id int PRIMARY KEY, data text, deleted boolean);
 INSERT INTO base_tbl VALUES (1, 'Row 1', false), (2, 'Row 2', true);
+ANALYZE base_tbl;
 
 CREATE RULE base_tbl_ins_rule AS ON INSERT TO base_tbl
   WHERE EXISTS (SELECT 1 FROM base_tbl t WHERE t.id = new.id)

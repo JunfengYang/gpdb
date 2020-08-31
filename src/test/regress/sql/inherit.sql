@@ -460,10 +460,13 @@ create index matest1i on matest1 ((1-id));
 create index matest3i on matest3 ((1-id));
 
 insert into matest1 (name) values ('Test 1');
+analyze matest1;
 insert into matest1 (name) values ('Test 2');
 insert into matest2 (name) values ('Test 3');
+analyze matest2;
 insert into matest2 (name) values ('Test 4');
 insert into matest3 (name) values ('Test 5');
+analyze matest3;
 insert into matest3 (name) values ('Test 6');
 
 set enable_indexscan = off;  -- force use of seqscan/sort, so no merge

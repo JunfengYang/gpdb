@@ -6,8 +6,10 @@ create table dqa_t2 (d int, i int, c char, dt date);
 
 insert into dqa_t1 select i%23, i%12, (i%10) || '', '2009-06-10'::date + ( (i%34) || ' days')::interval
 from generate_series(0, 99) i;
+analyze dqa_t1;
 insert into dqa_t2 select i%34, i%45, (i%10) || '', '2009-06-10'::date + ( (i%56) || ' days')::interval
 from generate_series(0, 99) i;
+analyze dqa_t2;
 
 -- With the default very small cost, the planner often prefer to just Gather
 -- all the rows to the QD. We want to test the more complicated multi-tage DQA

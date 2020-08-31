@@ -45,10 +45,11 @@ FROM all_entries
 ORDER BY segid;
 GRANT SELECT ON gp_instrument_shmem_detail TO public;
 SET OPTIMIZER=OFF;
-SELECT count(*) FROM pg_stat_activity;
+-- exclude autovacuum and self query
+SELECT count(*) FROM pg_stat_activity where query not like '%autovacuum%' ;
  count 
 -------
-     1
+     0
 (1 row)
 
 -- Expected result is 1 row, means only current query in instrument slots,

@@ -60,6 +60,7 @@ ANALYZE hash_name_heap;
 ANALYZE hash_txt_heap;
 ANALYZE hash_f8_heap;
 ANALYZE test_tsvector;
+ANALYZE testjsonb;
 ANALYZE bt_i4_heap;
 ANALYZE bt_name_heap;
 ANALYZE bt_txt_heap;

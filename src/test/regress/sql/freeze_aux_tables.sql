@@ -3,6 +3,9 @@
 
 -- First, create some helper functions.
 
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+
 CREATE TEMPORARY TABLE dummytable (id int4) distributed randomly;
 
 CREATE FUNCTION advance_xid_counter(n integer) RETURNS void as $$
@@ -188,3 +191,6 @@ group by segid = -1, relname, classify_age(age);
 
 select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('test_table_co_with_toast')
 group by segid = -1, relname, classify_age(age);
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

@@ -275,7 +275,8 @@ SELECT func_array_argument_plpythonu('{1,2,3}');
 -- Test: 27
 -- ----------------------------------------------------------------------
 
-
+alter system set autovacuum = off;
+select * from pg_reload_conf();
 
 set gp_autostats_mode to 'ON_NO_STATS';
 set gp_autostats_mode_in_functions to 'NONE';
@@ -346,6 +347,9 @@ SELECT count(*) FROM tbl_truncate_load;
 
 -- clean up
 RESET ALL;
+
+alter system reset autovacuum;
+select * from pg_reload_conf();
 
 -- ----------------------------------------------------------------------
 -- Test: 30

@@ -101,6 +101,7 @@ select ROW(1,2) in (ROW(3,4), ROW(1,2));
 select ROW(1,2) in (ROW(3,4), ROW(1,2::int8));
 
 -- Check row comparison with a subselect
+ANALYZE tenk1;
 select unique1, unique2 from tenk1
 where (unique1, unique2) < any (select ten, ten from tenk1 where hundred < 3)
       and unique1 <= 20

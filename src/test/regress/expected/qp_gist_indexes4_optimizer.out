@@ -172,6 +172,7 @@ INSERT INTO geometricTypes (seed, c, b, p)
    SeedToPolygon(x)
   FROM generate_series(1, 20000)x
  ;
+ANALYZE geometricTypes;
 -- ----------------------------------------------------------------------
 -- Test: test05_select.sql
 -- ----------------------------------------------------------------------
@@ -797,6 +798,7 @@ INSERT INTO textSearch VALUES (4, 'orca');
 INSERT INTO textSearch VALUES (3, 'gpdb');
 INSERT INTO textSearch VALUES (4, 'gist');
 INSERT INTO textSearch VALUES (3, 'cool');
+ANALYZE textSearch;
 SELECT * FROM textSearch 
  WHERE t @@ to_tsquery('test'); 
  seed |   t    
@@ -812,9 +814,8 @@ EXPLAIN SELECT * FROM textSearch
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..6.00 rows=1 width=17)
    ->  Index Scan using text_index on textsearch  (cost=0.00..6.00 rows=1 width=17)
          Index Cond: t @@ '''test'''::tsquery
-         Filter: t @@ '''test'''::tsquery
  Optimizer: Pivotal Optimizer (GPORCA) version 2.68.0
-(5 rows)
+(4 rows)
 
 DROP TABLE IF EXISTS textSearch;
 -- ----------------------------------------------------------------------

@@ -291,6 +291,7 @@ set optimizer_segments=2;
 create table dim1(dist int, pid int, code text, t1 text);
 
 insert into dim1 values (1, 0, 'OH', 'world1');
+analyze dim1;
 insert into dim1 values (1, 1, 'OH', 'world2');
 insert into dim1 values (1, 100, 'GA', 'world2'); -- should not have a match at all
 
@@ -447,6 +448,7 @@ create table pat(a int, b date) partition by range (b) (start ('2010-01-01') end
 insert into pat select i,date '2010-01-01' + i from generate_series(1, 10)i;  
 create table jpat(a int, b date);
 insert into jpat values(1, '2010-01-02');
+analyze jpat;
 -- start_ignore
 -- Known_opt_diff: MPP-21323
 -- end_ignore

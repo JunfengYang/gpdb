@@ -5,8 +5,10 @@ set search_path='qp_funcs_in_from', 'qp_funcs_in_contexts';
 
 CREATE TABLE foo (a int, b int);
 INSERT INTO foo select i, i+1 from generate_series(1,10) i;
+ANALYZE foo;
 CREATE TABLE bar (c int, d int);
 INSERT INTO bar select i, i+1 from generate_series(1,10) i;
+ANALYZE bar;
 
 -- @description function_in_from_0.sql
 SELECT * FROM func1_nosql_vol(5) order by 1; 

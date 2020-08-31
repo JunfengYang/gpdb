@@ -9,6 +9,9 @@ include: helpers/server_helpers.sql;
 !\retcode gpconfig -c max_prepared_transactions -v 3 --skipvalidation;
 !\retcode gpstop -ari;
 
+5: alter system set autovacuum = off;
+5: select * from pg_reload_conf();
+
 5: create table prepare_limit1 (a int);
 5: create table prepare_limit2 (a int);
 5: create table prepare_limit3 (a int);
@@ -55,6 +58,9 @@ include: helpers/server_helpers.sql;
 5: drop table prepare_limit2;
 5: drop table prepare_limit3;
 5: drop table prepare_limit4;
+
+5: alter system reset autovacuum;
+5: select * from pg_reload_conf();
 
 -- Not using gpconfig -r, else it makes max_prepared_transactions be default
 -- (50) and some isolation2 tests will fail due to "too many clients". Hardcode

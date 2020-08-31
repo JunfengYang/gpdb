@@ -225,6 +225,7 @@ select ROW(1,2) in (ROW(3,4), ROW(1,2::int8));
 (1 row)
 
 -- Check row comparison with a subselect
+ANALYZE tenk1;
 select unique1, unique2 from tenk1
 where (unique1, unique2) < any (select ten, ten from tenk1 where hundred < 3)
       and unique1 <= 20
@@ -240,14 +241,18 @@ explain (costs off)
 select thousand, tenthous from tenk1
 where (thousand, tenthous) >= (997, 5000)
 order by thousand, tenthous;
-                           QUERY PLAN                            
------------------------------------------------------------------
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand, tenthous
-   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
-         Index Cond: (ROW(thousand, tenthous) >= ROW(997, 5000))
+   ->  Sort
+         Sort Key: thousand, tenthous
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: (ROW(thousand, tenthous) >= ROW(997, 5000))
+               ->  Bitmap Index Scan on tenk1_thous_tenthous
+                     Index Cond: (ROW(thousand, tenthous) >= ROW(997, 5000))
  Optimizer: Postgres query optimizer
-(5 rows)
+(9 rows)
 
 select thousand, tenthous from tenk1
 where (thousand, tenthous) >= (997, 5000)
@@ -620,13 +625,12 @@ explain (costs off)
 select row_to_json(q) from
   (select thousand, tenthous from tenk1
    where thousand = 42 and tenthous < 2000 offset 0) q;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Subquery Scan on q
          ->  Index Only Scan using tenk1_thous_tenthous on tenk1
                Index Cond: ((thousand = 42) AND (tenthous < 2000))
- Optimizer: Postgres query optimizer
 (5 rows)
 
 select row_to_json(q) from

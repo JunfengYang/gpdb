@@ -49,7 +49,8 @@ GRANT SELECT ON gp_instrument_shmem_detail TO public;
 
 SET OPTIMIZER=OFF;
 
-SELECT count(*) FROM pg_stat_activity;
+-- exclude autovacuum and self query
+SELECT count(*) FROM pg_stat_activity where query not like '%autovacuum%' ;
 
 -- Expected result is 1 row, means only current query in instrument slots,
 -- If more than one row returned, means previous test has leaked slots.

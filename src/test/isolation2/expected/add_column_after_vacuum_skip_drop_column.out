@@ -1,6 +1,16 @@
 -- @Description Ensures that an ALTER TABLE ADD COLUMN will drop segfiles in
 --              AOSEG_STATE_AWAITING_DROP state left over by a previous vacuum
 --
+
+-- Disable autovacuum to avoid the concurrent transactions affects for ao vacuum
+ALTER SYSTEM SET autovacuum = off;
+ALTER
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
+
 CREATE TABLE aoco_add_column_after_vacuum_skip_drop (a INT, b INT) WITH (appendonly=true, orientation=column);
 CREATE
 INSERT INTO aoco_add_column_after_vacuum_skip_drop SELECT i as a, i as b FROM generate_series(1, 10) AS i;
@@ -67,3 +77,11 @@ INSERT 100
  2     | f        | 1     
  2     | f        | 1     
 (6 rows)
+
+ALTER SYSTEM RESET autovacuum;
+ALTER
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)

@@ -4143,6 +4143,8 @@ COPY city (id, name, countrycode, district, population) FROM stdin;
 4079	Rafah	PSE	Rafah	92020
 \.
 
+ANALYZE city;
+
 
 --
 -- Data for Name: country; Type: TABLE DATA; Schema: public; Owner: chriskl
@@ -4390,6 +4392,7 @@ ATF	French Southern territories	Antarctica	Antarctica	7780		0		0.00		Terres aust
 UMI	United States Minor Outlying Islands	Oceania	Micronesia/Caribbean	16		0		0.00		United States Minor Outlying Islands	Dependent Territory of the US	George W. Bush		UM
 \.
 
+ANALYZE country;
 
 --
 -- Data for Name: countrylanguage; Type: TABLE DATA; Schema: public; Owner: chriskl
@@ -5382,6 +5385,7 @@ RUS	Belorussian	f	0.30000001
 USA	Portuguese	f	0.2
 \.
 
+ANALYZE countrylanguage;
 
 ALTER TABLE ONLY city
     ADD CONSTRAINT city_pkey PRIMARY KEY (id);

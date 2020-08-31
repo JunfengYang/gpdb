@@ -1,3 +1,10 @@
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
 drop table if exists vfheapbm;
 create table vfheapbm(a, b, c) as
 select 1, i, repeat('x', 1000 + i % 2) from generate_series(1, 100)i distributed by (a);
@@ -26,5 +33,12 @@ select pg_relation_size('pg_bitmapindex.pg_bm_' || 'ivfheapbm'::regclass::oid::t
  pg_relation_size 
 ------------------
             65536
+(1 row)
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
 (1 row)
 

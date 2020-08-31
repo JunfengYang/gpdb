@@ -228,9 +228,11 @@ INSERT INTO dml_heap_p VALUES(NULL,1,false,'pn',NULL),(1,NULL,false,'pn',0),(NUL
 INSERT INTO dml_heap_s VALUES(generate_series(1,100),generate_series(1,100),'s');
 INSERT INTO dml_heap_s VALUES(NULL,NULL,'sn'),(1,NULL,'sn'),(NULL,0,'sn');
 INSERT INTO dml_heap_s VALUES(generate_series(1,10),NULL,'sn');
+ANALYZE dml_heap_s;
 INSERT INTO dml_heap_r VALUES(generate_series(1,100),generate_series(1,100),'r');
 INSERT INTO dml_heap_r VALUES(NULL,NULL,'rn'),(1,NULL,'rn'),(NULL,0,'rn');
 INSERT INTO dml_heap_r VALUES(generate_series(1,10),NULL,'rn');
+ANALYZE dml_heap_r;
 CREATE TABLE dml_heap_pt_r (
 	a int ,
 	b int ,

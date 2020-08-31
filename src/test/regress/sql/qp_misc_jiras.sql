@@ -638,6 +638,7 @@ copy qp_misc_jiras.tbl5223_sales_fact from stdin;
 2-24-08	1	2.44
 2-8-08	2	26.25
 \.
+analyze qp_misc_jiras.tbl5223_sales_fact;
 
 SELECT
   product, year, sales, 
@@ -1199,6 +1200,7 @@ copy pre_visitor_ca_event_ao from STDIN with delimiter '~' null '';
 ~56456276011434289130~~~~~~~~~~~~~~~~~~~~~~~~~~2071031722~~~~~~2009-09-21 17:21:05~pause~0~~~~~~
 2009-09-25 01:56:35~72348551069183808890~admin.brightcove.com~2009-09-21 17:46:21~2009-09-21 17:47:21~~~0~unknown~~Houston~United States~US~69.15.167.132~29.7755~-95.4152~Wilson Cribbs & Goren~~~~~~~~~~~~~~~~~~~~~~~~TX~
 \.
+analyze pre_visitor_ca_event_ao;
 
 create table pre_visitor_ca_event_cao with (appendonly=true,orientation=column) as select * from pre_visitor_ca_event_ao;
 

@@ -88,6 +88,8 @@ insert into ow_customer values
   ( 3, 'Lady Macbeth', 'Inverness'),
   ( 4, 'Witches, Inc', 'Lonely Heath');
 
+analyze ow_customer;
+
 -- Vendors
 insert into ow_vendor values 
   ( 10, 'Witches, Inc', 'Lonely Heath'),
@@ -95,6 +97,8 @@ insert into ow_vendor values
   ( 30, 'Duncan', 'Forres'),
   ( 40, 'Macbeth', 'Inverness'),
   ( 50, 'Macduff', 'Fife');
+
+analyze ow_vendor;
 
 -- Products
 insert into ow_product values 
@@ -107,6 +111,7 @@ insert into ow_product values
   ( 700, 'Hamburger', 'Grey'),
   ( 800, 'Fries', 'Grey');
 
+analyze ow_product;
 
 -- Sales (transactions)
 insert into ow_sale values 
@@ -123,6 +128,8 @@ insert into ow_sale values
   ( 4, 40, 700, '1401-6-1', 1, 1),
   ( 4, 40, 800, '1401-6-1', 1, 1);
 
+analyze ow_sale;
+
 -- Sales (ord transactions)
 insert into ow_sale_ord values 
   ( 1,2, 40, 100, '1401-1-1', 1100, 2400),
@@ -137,6 +144,8 @@ insert into ow_sale_ord values
   ( 10,3, 30, 600, '1401-6-1', 12, 5),
   ( 11,4, 40, 700, '1401-6-1', 1, 1),
   ( 12,4, 40, 800, '1401-6-1', 1, 1);
+
+analyze ow_sale_ord;
 -- end_ignore
 
 set datestyle="ISO, MDY";
@@ -23886,6 +23895,8 @@ insert into tab12773_test values('mersfe','Sword','Black',7,23,66);
 insert into tab12773_test values('3sef3','Dream','Black',9,25,68);
 insert into tab12773_test values('3sesdff3','Fries','Grey',11,27,5456);
 
+analyze tab12773_test;
+
 drop table if exists tab12773_vendor;
 
 create table tab12773_vendor 
@@ -23934,6 +23945,8 @@ insert into tab12773_vendor values
   ( 40, 'Macbeth', 'Inverness'),
   ( 50, 'Macduff', 'Fife');
 
+analyze tab12773_vendor;
+
 -- Products
 insert into tab12773_product values 
   ( 100, 'Sword', 'Black'),
@@ -23945,6 +23958,7 @@ insert into tab12773_product values
   ( 700, 'Hamburger', 'Grey'),
   ( 800, 'Fries', 'Grey');
 
+analyze tab12773_product;
 
 -- Sales (ord transactions)
 insert into tab12773_sale_ord values 
@@ -23961,6 +23975,7 @@ insert into tab12773_sale_ord values
   ( 11,4, 40, 700, '1401-6-1', 1, 1),
   ( 12,4, 40, 800, '1401-6-1', 1, 1);
 
+analyze tab12773_sale_ord;
 
 --The following query was erroring when a varchar was used in partition by clause
 

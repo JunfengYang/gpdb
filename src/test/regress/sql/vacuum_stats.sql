@@ -1,3 +1,6 @@
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+
 CREATE TABLE vacstat_test (a int);
 INSERT INTO vacstat_test SELECT i FROM generate_series(1,10) i ;
 VACUUM vacstat_test;
@@ -19,4 +22,7 @@ AND relallvisible =
     (SELECT SUM(relallvisible) FROM gp_dist_random('pg_class')
      WHERE oid='vacstat_test'::regclass);
 
-DROP TABLE vacstat_test
+DROP TABLE vacstat_test;
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

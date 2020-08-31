@@ -4,6 +4,7 @@
 
 CREATE TABLE vactst (j INT DEFAULT 1,i INT);
 INSERT INTO vactst(i) VALUES (1);
+ANALYZE vactst;
 INSERT INTO vactst SELECT * FROM vactst;
 INSERT INTO vactst SELECT * FROM vactst;
 INSERT INTO vactst SELECT * FROM vactst;

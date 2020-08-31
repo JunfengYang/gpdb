@@ -16,6 +16,14 @@ CREATE
 !\retcode gpstop -ari;
 (exited with code 0)
 
+5: alter system set autovacuum = off;
+ALTER
+5: select * from pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
+
 5: create table prepare_limit1 (a int);
 CREATE
 5: create table prepare_limit2 (a int);
@@ -110,6 +118,14 @@ DROP
 DROP
 5: drop table prepare_limit4;
 DROP
+
+5: alter system reset autovacuum;
+ALTER
+5: select * from pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
 
 -- Not using gpconfig -r, else it makes max_prepared_transactions be default
 -- (50) and some isolation2 tests will fail due to "too many clients". Hardcode

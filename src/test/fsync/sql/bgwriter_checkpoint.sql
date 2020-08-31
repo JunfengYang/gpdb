@@ -18,6 +18,8 @@
 -- m/num times hit:\'[4-7]\'/
 -- s/num times hit:\'[4-7]\'/num times hit:\'greater_than_two\'/
 -- end_matchsubs
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
 begin;
 create function num_dirty(relid oid) returns bigint as
 $$
@@ -137,3 +139,6 @@ select gp_inject_fault('fsync_counter', 'status', 2::smallint);
 
 -- Reset all faults.
 select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

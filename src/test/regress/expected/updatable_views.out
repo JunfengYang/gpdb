@@ -359,6 +359,7 @@ NOTICE:  drop cascades to view ro_view19
 -- simple updatable view
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0;
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
@@ -426,6 +427,7 @@ NOTICE:  drop cascades to view rw_view1
 -- view on top of view
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT b AS bb, a AS aa FROM base_tbl WHERE a>0;
 CREATE VIEW rw_view2 AS SELECT aa AS aaa, bb AS bbb FROM rw_view1 WHERE aa<10;
 SELECT table_name, is_insertable_into
@@ -502,6 +504,7 @@ drop cascades to view rw_view2
 -- view on top of view with rules
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0 OFFSET 0; -- not updatable without rules/triggers
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a<10;
 SELECT table_name, is_insertable_into
@@ -708,6 +711,7 @@ drop cascades to view rw_view2
 -- view on top of view with triggers
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a>0 OFFSET 0; -- not updatable without rules/triggers
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a<10;
 SELECT table_name, is_insertable_into
@@ -914,6 +918,7 @@ DROP FUNCTION rw_view1_trig_fn();
 -- update using whole row from view
 CREATE TABLE base_tbl (a int PRIMARY KEY, b text DEFAULT 'Unspecified');
 INSERT INTO base_tbl SELECT i, 'Row ' || i FROM generate_series(-2, 2) g(i);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT b AS bb, a AS aa FROM base_tbl;
 CREATE FUNCTION rw_view1_aa(x rw_view1)
   RETURNS int AS $$ SELECT x.aa $$ LANGUAGE sql;
@@ -1115,6 +1120,7 @@ DROP TABLE base_tbl;
 -- view with ORDER BY
 CREATE TABLE base_tbl (a int, b int);
 INSERT INTO base_tbl VALUES (1,2), (4,5), (3,-3);
+ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl ORDER BY a+b;
 SELECT * FROM rw_view1;
  a | b  
@@ -1653,6 +1659,7 @@ CREATE VIEW rw_view1 AS
   WHERE EXISTS(SELECT 1 FROM ref_tbl r WHERE r.a = b.a)
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5); -- ok
+ANALYZE base_tbl;
 INSERT INTO rw_view1 VALUES (15); -- should fail
 ERROR:  new row violates check option for view "rw_view1"
 DETAIL:  Failing row contains (15).
@@ -2042,6 +2049,7 @@ drop cascades to view rw_view2
 -- security barrier view on top of table with rules
 CREATE TABLE base_tbl(id int PRIMARY KEY, data text, deleted boolean);
 INSERT INTO base_tbl VALUES (1, 'Row 1', false), (2, 'Row 2', true);
+ANALYZE base_tbl;
 CREATE RULE base_tbl_ins_rule AS ON INSERT TO base_tbl
   WHERE EXISTS (SELECT 1 FROM base_tbl t WHERE t.id = new.id)
   DO INSTEAD

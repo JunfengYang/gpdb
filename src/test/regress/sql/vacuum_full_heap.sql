@@ -1,3 +1,6 @@
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+
 drop table if exists vfheap;
 create table vfheap (a, b, c) as
 select 1, i, repeat('x', 1000) from generate_series(1, 100)i distributed by (a);
@@ -65,3 +68,6 @@ vacuum full vfheaptoast;
 
 select pg_relation_size((select reltoastrelid from pg_class where oid = 'vfheaptoast'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;
 
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

@@ -138,6 +138,7 @@ drop function func1_mod_int_stb(int);
 
 CREATE TABLE srf_testtab (t text) DISTRIBUTED BY (t);
 INSERT INTO srf_testtab VALUES ('foo 0');
+ANALYZE srf_testtab;
 INSERT INTO srf_testtab VALUES ('foo 1');
 INSERT INTO srf_testtab VALUES ('foo -1');
 

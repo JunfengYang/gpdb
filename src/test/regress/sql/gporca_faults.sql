@@ -7,6 +7,7 @@ SET search_path = gporca_faults, public;
 
 CREATE TABLE foo (a int, b int);
 INSERT INTO foo VALUES (1,1);
+ANALYZE foo;
 
 -- test interruption requests to optimization
 select gp_inject_fault('opt_relcache_translator_catalog_access', 'reset', 1);

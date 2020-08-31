@@ -325,9 +325,13 @@ create index minmaxtest2i on minmaxtest2(f1 desc);
 create index minmaxtest3i on minmaxtest3(f1) where f1 is not null;
 
 insert into minmaxtest values(11), (12);
+ANALYZE minmaxtest;
 insert into minmaxtest1 values(13), (14);
+ANALYZE minmaxtest1;
 insert into minmaxtest2 values(15), (16);
+ANALYZE minmaxtest2;
 insert into minmaxtest3 values(17), (18);
+ANALYZE minmaxtest3;
 
 set enable_seqscan=off;
 explain (costs off)

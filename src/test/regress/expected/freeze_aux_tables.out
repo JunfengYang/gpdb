@@ -1,6 +1,13 @@
 -- These tests verify that vacuum freeze correctly updates age of auxiliary
 -- tables along with the age of a parent appendonly table
 -- First, create some helper functions.
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
 CREATE TEMPORARY TABLE dummytable (id int4) distributed randomly;
 CREATE FUNCTION advance_xid_counter(n integer) RETURNS void as $$
 declare
@@ -377,4 +384,11 @@ group by segid = -1, relname, classify_age(age);
  f         | pg_toast_<oid>     | very young
  f         | pg_aovisimap_<oid> | very young
 (8 rows)
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
 

@@ -1,6 +1,13 @@
 create schema uao_dml_@orientation@;
 set search_path=uao_dml_@orientation@;
 set gp_default_storage_options='orientation=@orientation@';
+alter system set autovacuum = off;
+select * from pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
 -- Some of the UPDATE commands in this test fail with ORCA, with an error:
 -- ERROR:  multiple updates to a row by the same query is not allowed
 -- The queries in this test are not interesting from the point of view of
@@ -106,6 +113,7 @@ ROLLBACK;
 DROP TABLE IF EXISTS ao2_@orientation@;
 create table ao2_@orientation@ (i int, j varchar(10)) with (appendonly=true) distributed by (i);
 insert into ao2_@orientation@ select i,'aa'||i from generate_series(21,30) as i;
+analyze ao2_@orientation@;
 select reltuples from pg_class where relname = 'ao2_@orientation@';
  reltuples 
 -----------
@@ -1197,6 +1205,7 @@ DROP TABLE IF EXISTS foo_@orientation@;
 CREATE TABLE foo_@orientation@ (a INT, b INT, c CHAR(128)) WITH (appendonly=true) DISTRIBUTED BY (a);
 CREATE INDEX foo_@orientation@_index ON foo_@orientation@(b);
 INSERT INTO foo_@orientation@ SELECT i as a, i as b, 'hello world' as c FROM generate_series(1,1000) AS i;
+ANALYZE foo_@orientation@;
 SELECT reltuples FROM pg_class WHERE relname = 'foo_@orientation@';
  reltuples 
 -----------
@@ -1474,6 +1483,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into  uao_ooo_upd_tab1 values (1,10);
 insert  into uao_ooo_upd_tab2 values (1,11),(1,22);
+analyze uao_ooo_upd_tab1;
+analyze uao_ooo_upd_tab2;
 select * from uao_ooo_upd_tab1 order by 2;
  i | j  
 ---+----
@@ -1518,8 +1529,10 @@ create table uao_ooo_upd_tab2 (i int, j int ) with (appendonly=true) ;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into  uao_ooo_upd_tab1 values (1,10) ,(1,10) ;
+analyze uao_ooo_upd_tab1;
 update uao_ooo_upd_tab1 set j = j + 3 where j = 10;
 insert  into uao_ooo_upd_tab2 values (1,11),(1,22),(1,33),(1,44),(1,55)  ;
+analyze uao_ooo_upd_tab2;
 select * from uao_ooo_upd_tab1 order by 2;
  i | j  
 ---+----
@@ -1585,6 +1598,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into  uao_ooo_upd_tab1 values (1,10) ,(1,10) ;
 insert  into uao_ooo_upd_tab2 values (1,11),(1,22),(1,33),(1,44),(1,55)  ;
+analyze uao_ooo_upd_tab1;
+analyze uao_ooo_upd_tab2;
 BEGIN;
 update uao_ooo_upd_tab1 set j = j + 3 where j = 10;
 select * from uao_ooo_upd_tab1 order by 2;
@@ -1876,3 +1891,10 @@ SELECT COUNT(*) FROM foo WHERE b = 1;
 (1 row)
 
 COMMIT;
+alter system reset autovacuum;
+select * from pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+

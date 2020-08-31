@@ -1387,6 +1387,7 @@ explain select string_agg(a, '') from mpp14125 group by b;
 -- Test unsupported ORCA feature: agg(set returning function)
 CREATE TABLE tbl_agg_srf (foo int[]) DISTRIBUTED RANDOMLY;
 INSERT INTO tbl_agg_srf VALUES (array[1,2,3]);
+ANALYZE tbl_agg_srf;
 EXPLAIN SELECT count(unnest(foo)) FROM tbl_agg_srf;
 SELECT count(unnest(foo)) FROM tbl_agg_srf;
 
@@ -1438,6 +1439,7 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
 --
 create temp table group_by_const (col1 int, col2 int);
 insert into group_by_const select i from generate_series(1, 1000) i;
+analyze group_by_const;
 
 explain (costs off)
 select 1, sum(col1) from group_by_const group by 1;

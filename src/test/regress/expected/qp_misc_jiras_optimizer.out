@@ -1071,6 +1071,7 @@ CREATE TABLE qp_misc_jiras.tbl5223_sales_fact(
 	   sales    numeric(12,2)
 ) distributed by (product);
 copy qp_misc_jiras.tbl5223_sales_fact from stdin;
+analyze qp_misc_jiras.tbl5223_sales_fact;
 SELECT
   product, year, sales, 
   100*(1.0 - sales/(sum(sales) over (w))) as "% sales_growth"
@@ -3253,6 +3254,7 @@ contentaccess_applicationid varchar) with (appendonly=true);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'visitor_timestamp' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy pre_visitor_ca_event_ao from STDIN with delimiter '~' null '';
+analyze pre_visitor_ca_event_ao;
 create table pre_visitor_ca_event_cao with (appendonly=true,orientation=column) as select * from pre_visitor_ca_event_ao;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 select count(*) from pre_visitor_ca_event_ao;
@@ -4789,7 +4791,7 @@ drop table qp_misc_jiras.tbl7285_axg;
 show autovacuum;
  autovacuum 
 ------------
- off
+ on
 (1 row)
 
 set autovacuum=on;

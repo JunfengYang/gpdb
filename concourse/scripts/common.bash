@@ -53,7 +53,7 @@ function make_cluster() {
   source $PWD/gpdemo-env.sh
 
   gpconfig -c autovacuum -v on --masteronly
-  psql postgres -c "select * from pg_reload_conf()"
+  gpstop -u
 EOF
 
   if [[ "$MAKE_TEST_COMMAND" =~ gp_interconnect_type=proxy ]]; then

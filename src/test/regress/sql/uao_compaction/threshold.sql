@@ -1,7 +1,13 @@
 -- @Description Tests the basic behavior of (lazy) vacuum w.r.t. to the threshold guc.
+
+-- Disable autovacuum to prevent backend transaction while VACUUM.
+ALTER SYSTEM SET autovacuum = off;
+SELECT * FROM pg_reload_conf();
+
 CREATE TABLE uao_threshold (a INT, b INT, c CHAR(128)) WITH (appendonly=true) distributed by (b);
 CREATE INDEX uao_threshold_index ON uao_threshold(a);
 INSERT INTO uao_threshold SELECT i as a, 1 as b, 'hello world' as c FROM generate_series(1, 100) AS i;
+ANALYZE uao_threshold;
 
 \set QUIET off
 
@@ -47,3 +53,6 @@ INSERT INTO uao_threshold_boundary SELECT 1, i from generate_series(1, 1000) i;
 DELETE FROM uao_threshold_boundary WHERE b < 102;
 VACUUM uao_threshold_boundary;
 SELECT * FROM gp_toolkit.__gp_aovisimap_compaction_info('uao_threshold_boundary'::regclass);
+
+ALTER SYSTEM RESET autovacuum;
+SELECT * FROM pg_reload_conf();

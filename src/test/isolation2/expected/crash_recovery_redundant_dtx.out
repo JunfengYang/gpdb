@@ -34,7 +34,13 @@ CREATE
  Success:                      
 (1 row)
 -- the 'COMMIT' record is logically after REDO pointer
-2&:insert into crash_test_redundant values (1);  <waiting ...>
+2:begin;
+BEGIN
+2:insert into crash_test_redundant values (1);
+INSERT 1
+2:analyze crash_test_redundant;
+ANALYZE
+2&:commit;  <waiting ...>
 
 -- resume checkpoint
 3:select gp_inject_fault('checkpoint_dtx_info', 'reset', 1);

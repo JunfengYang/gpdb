@@ -17,6 +17,7 @@ CREATE TABLE sto_alt_uao1(
           col_set_default numeric) with(appendonly=true) DISTRIBUTED RANDOMLY;
 
 insert into sto_alt_uao1 values ('0_zero', 0, '0_zero', 0, 0, 0, '{0}', 0, 0, '1-1-2000', 0);
+analyze sto_alt_uao1;
 insert into sto_alt_uao1 values ('1_zero', 1, '1_zero', 1, 1, 1, '{1}', 1, 1, '1-1-2001', 1);
 insert into sto_alt_uao1 values ('2_zero', 2, '2_zero', 2, 2, 2, '{2}', 2, 2, '1-1-2002', 2);
 select count(*) = 3 as passed from sto_alt_uao1;

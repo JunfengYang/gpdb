@@ -172,6 +172,7 @@ INSERT INTO geometricTypes (seed, c, b, p)
    SeedToPolygon(x)
   FROM generate_series(1, 20000)x
  ;
+ANALYZE geometricTypes;
 -- ----------------------------------------------------------------------
 -- Test: test05_select.sql
 -- ----------------------------------------------------------------------
@@ -817,6 +818,7 @@ INSERT INTO textSearch VALUES (4, 'orca');
 INSERT INTO textSearch VALUES (3, 'gpdb');
 INSERT INTO textSearch VALUES (4, 'gist');
 INSERT INTO textSearch VALUES (3, 'cool');
+ANALYZE textSearch;
 SELECT * FROM textSearch 
  WHERE t @@ to_tsquery('test'); 
  seed |   t    
@@ -827,15 +829,13 @@ SELECT * FROM textSearch
 
 EXPLAIN SELECT * FROM textSearch 
  WHERE t @@ to_tsquery('test'); 
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..200.27 rows=1 width=17)
-   ->  Index Scan using text_index on textsearch  (cost=0.00..200.27 rows=1 width=17)
-         Index Cond: t @@ '''test'''::tsquery
-         Filter: t @@ '''test'''::tsquery
- Settings:  enable_seqscan=off; optimizer=off
- Optimizer status: Postgres query optimizer
-(6 rows)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.13..8.20 rows=3 width=16)
+   ->  Index Scan using text_index on textsearch  (cost=0.13..8.16 rows=1 width=16)
+         Index Cond: (t @@ '''test'''::tsquery)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 DROP TABLE IF EXISTS textSearch;
 -- ----------------------------------------------------------------------

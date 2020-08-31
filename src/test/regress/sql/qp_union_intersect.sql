@@ -674,6 +674,7 @@ select sum(a) from (
 --
 create table t_test_append_hash(a int, b int, c int) distributed by (a);
 insert into t_test_append_hash select i, i+1, i+2 from generate_series(1, 5)i;
+analyze t_test_append_hash;
 
 explain (costs off)
 with t(a, b, s) as (
