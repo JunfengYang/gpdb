@@ -507,7 +507,7 @@ invoke_agg_trans_func(AggState *aggstate,
 		}
 	}
 
-	*transValueIsNull = fcinfo->isnull;
+	*transValueIsNull = DatumGetPointer(newVal) == NULL ? true : false;
 	if (!fcinfo->isnull)
 		*noTransvalue = false;
 

@@ -77,6 +77,17 @@ insert into aggspill select i, i*2, i::text from generate_series(1, 10000) i;
 insert into aggspill select i, i*2, i::text from generate_series(1, 100000) i;
 insert into aggspill select i, i*2, i::text from generate_series(1, 1000000) i;
 
+-- Test agg spilling with filter
+create table spilltest_with_filter (a integer, b numeric(18,5), f text) distributed randomly;
+insert into spilltest_with_filter select a, a%25 from generate_series(1,500000) a;
+analyze spilltest_with_filter;
+set enable_hashagg=on;
+set enable_groupagg=off;
+set statement_mem=2048;
+
+select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) select a, sum(b) filter (where f=''test'') from spilltest_with_filter group by a order by a limit 1;');
+select a, sum(b) filter (where f='test') from spilltest_with_filter group by a order by a limit 1;
+
 -- No spill with large statement memory 
 set statement_mem = '125MB';
 select count(*) from (select i, count(*) from aggspill group by i,j having count(*) = 1) g;
