@@ -5347,64 +5347,37 @@ bmcostestimate(PG_FUNCTION_ARGS)
 	Selectivity *indexSelectivity = (Selectivity *) PG_GETARG_POINTER(6);
 	double	   *indexCorrelation = (double *) PG_GETARG_POINTER(7);
 
-	List *selectivityQuals;
-	double numIndexTuples;
-	List *groupExprs = NIL;
-	int i;
-	double numDistinctValues;
+	RelOptInfo *baserel = index->rel;
+	RangeTblEntry *rte = planner_rt_fetch(baserel->relid, root);
+
+	Assert(rte->rtekind == RTE_RELATION);
+	Assert(rte->relid != InvalidOid);
 
 	/*
-	 * Estimate the number of index tuples. This is basically the same
-	 * as the one in genericcostestimate(), except that
-	 * (1) We don't consider ScalarArrayOpExpr in the calculation, since
-	 *     each value has its own bit vector.
-	 * (2) since the bitmap index stores bit vectors, one for each distinct
-	 *     value, we adjust the number of index tuples by dividing the
-	 *     value with the number of distinct values.
+	 * We create a LOV for each distinct key in bitmap index. And the LOV point
+	 * to the bitmap vector pages. Since each bitmap vector has the same length,
+	 * although we do compress for the bits, but we can assume each distinct
+	 * key has approximately same number of bitmap vector pages(although there
+	 * must be some counterexamples). So the indexPages should be:
+	 * selectedDistinctValues / numDistinctValues * index->pages.
+	 *
+	 * But the issue is we can't estimate both of the distinct values from stats
+	 * through estimate_num_groups since it produces larger estimates. Especially
+	 * for selectedDistinctValues.
+	 *
+	 * Image below cases:
+	 * 1. indexSelectivity also correspond to how may distinct values get selected.
+	 * Then the result of genericcostestimate's indexPages will be accurate.
+	 * 2. indexSelectivity is high but only match a small number of distinct values.
+	 * This means the bitmap vector is sparse. So the total index pages number should
+	 * be small.
+	 * 3. indexSelectivity is low but match lots of distinct values. This also means
+	 * the bitmap vector is sparse, and the total index pages number should be small.
+	 *
+	 * The estimate in genericcostestimate should works fine for above cases although
+	 * it's not accurate.
 	 */
-	if (index->indpred != NIL)
-	{
-		List	   *strippedQuals;
-		List	   *predExtraQuals;
-
-		strippedQuals = get_actual_clauses(indexQuals);
-		predExtraQuals = list_difference(index->indpred, strippedQuals);
-		selectivityQuals = list_concat(predExtraQuals, indexQuals);
-	}
-	else
-		selectivityQuals = indexQuals;
-
-	/* Estimate the fraction of main-table tuples that will be visited */
-	*indexSelectivity = clauselist_selectivity(root, selectivityQuals,
-											   index->rel->relid,
-											   JOIN_INNER,
-											   false /* use_damping */);
-
-	/*
-	 * Construct a list of index keys, so that we can estimate the number
-	 * of distinct values for those keys.
-	 */
-	for (i = 0; i < index->ncolumns; i ++)
-	{
-		if (index->indexkeys[i] > 0)
-		{
-			Var *var = find_indexkey_var(root, index->rel, (AttrNumber) index->indexkeys[i]);
-
-			groupExprs = lappend(groupExprs, var);
-		}
-	}
-	if (index->indexprs != NULL)
-		groupExprs = list_concat_unique(groupExprs, index->indexprs);
-
-	Assert(groupExprs != NULL);
-	numDistinctValues = estimate_num_groups(root, groupExprs, index->rel->rows);
-	if (numDistinctValues == 0)
-		numDistinctValues = 1;
-
-	numIndexTuples = *indexSelectivity * index->rel->tuples;
-	numIndexTuples = rint(numIndexTuples / numDistinctValues);
-
-	genericcostestimate(root, index, indexQuals, outer_rel, numIndexTuples,
+	genericcostestimate(root, index, indexQuals, outer_rel, 0,
 						indexStartupCost, indexTotalCost,
 						indexSelectivity, indexCorrelation);
 

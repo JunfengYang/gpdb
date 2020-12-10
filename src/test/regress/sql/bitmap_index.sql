@@ -221,3 +221,54 @@ analyze bmap_test;
 select * from bmap_test where x = 1 order by x,y,z;
 
 drop table bmap_test;
+
+SET enable_seqscan = ON;
+SET enable_indexscan = ON;
+set enable_bitmapscan = ON;
+
+--
+-- correct cost estimate to avoid bm index scan for wrong result
+--
+CREATE TABLE test_bmselec(id int, type int, msg text) distributed by (id);
+INSERT INTO test_bmselec (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,100000) as g;
+CREATE INDEX test_bmselec_type_idx ON test_bmselec USING bitmap(type);
+ANALYZE test_bmselec;
+
+-- it used to choose bitmap index over seq scan, which not right.
+explain analyze select * from test_bmselec where type < 500;
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+-- we can see the bitmap index scan is much more slower
+explain analyze select * from test_bmselec where type < 500;
+DROP TABLE test_bmselec;
+
+SET enable_seqscan = ON;
+SET enable_bitmapscan = ON;
+
+-- for sparse bitmap index
+create table test_bmsparse(id int, type int, msg text) distributed by (id);
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,10000) as g;
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 200, md5(g::text) FROM generate_series(1,80000) as g;
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,10000) as g;
+CREATE INDEX test_bmsparse_type_idx ON test_bmsparse USING bitmap(type);
+ANALYZE test_bmsparse;
+
+-- select lots of rows but on small part of distinct values, should use seq scan
+explain analyze select * from test_bmsparse where type < 200;
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+explain analyze select * from test_bmsparse where type < 200;
+
+SET enable_seqscan = ON;
+SET enable_bitmapscan = ON;
+-- select small part of table but on lots of distinct values, should use seq scan
+explain analyze select * from test_bmsparse where type > 500;
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+explain analyze select * from test_bmsparse where type > 500;
+
+DROP TABLE test_bmsparse;
+
