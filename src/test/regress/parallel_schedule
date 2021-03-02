@@ -59,14 +59,6 @@ test: gp_gin_index
 test: create_aggregate create_function_3 create_cast constraints triggers select inherit typed_table vacuum drop_if_exists updatable_views roleattributes create_am hash_func errors
 
 # ----------
-# Because vacuum will detect concurrently running transactions, it is necessary to
-# run this test on its own, or it might not detect the pages are 'all visible'
-# ----------
-test: disable_autovacuum
-test: vacuum_stats
-test: enable_autovacuum
-
-# ----------
 # sanity_check does a vacuum, affecting the sort order of SELECT *
 # results. So it should not run parallel to other tests.
 #
@@ -123,6 +115,14 @@ test: write_parallel
 
 # no relation related tests can be put in this group
 test: publication subscription
+
+# ----------
+# Because vacuum will detect concurrently running transactions, it is necessary to
+# run this test on its own, or it might not detect the pages are 'all visible'
+# ----------
+test: disable_autovacuum
+test: vacuum_stats
+test: enable_autovacuum
 
 # ----------
 # Another group of parallel tests

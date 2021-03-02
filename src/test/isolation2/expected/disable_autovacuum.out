@@ -1,7 +1,11 @@
-alter system set autovacuum = off;
-ALTER
-select * from pg_reload_conf();
- pg_reload_conf 
-----------------
- t              
+!\retcode gpconfig -c autovacuum -v off --skipvalidation;
+(exited with code 0)
+!\retcode gpstop -ari;
+(exited with code 0)
+! psql postgres -c "show autovacuum;";
+ autovacuum 
+------------
+ off
 (1 row)
+
+
